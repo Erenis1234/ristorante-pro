@@ -47,28 +47,34 @@ function mapOrdine(db, ordine, userId) {
 	}
 }
 
-async function syncRigheOrdine(ordineId, righe, userId) {
+function syncRigheOrdine(ordineId, righe, userId) {
 	const db = getDb()
-	const esistenti = db.prepare(
-		'SELECT id FROM ordine_fornitore_righe WHERE ordine_id = ? AND user_id = ?'
-	).all(ordineId, userId)
 
-	for (const riga of esistenti) {
-		await dbManager.elimina('ordine_fornitore_righe', riga.id, userId)
-	}
+	// Transazione atomica: elimina e reinserisce tutte le righe in un unico
+	// blocco, cos\u00ec un errore a met\u00e0 non lascia l'ordine con righe parzialmente
+	// cancellate o duplicate.
+	db.transaction(() => {
+		const esistenti = db.prepare(
+			'SELECT id FROM ordine_fornitore_righe WHERE ordine_id = ? AND user_id = ?'
+		).all(ordineId, userId)
 
-	for (const riga of righe) {
-		const nomeIngrediente = String(riga.ingrediente_nome || riga.ingrediente_id || '').trim()
-		if (!nomeIngrediente) continue
-		await dbManager.salva('ordine_fornitore_righe', {
-			ordine_id: ordineId,
-			ingrediente_id: null,
-			ingrediente_nome: nomeIngrediente,
-			quantita: Number(riga.quantita ?? 0),
-			prezzo: Number(riga.prezzo ?? 0),
-			quantita_ricevuta: Number(riga.quantita_ricevuta ?? 0),
-		}, userId)
-	}
+		for (const riga of esistenti) {
+			dbManager.eliminaLocale('ordine_fornitore_righe', riga.id, userId)
+		}
+
+		for (const riga of righe) {
+			const nomeIngrediente = String(riga.ingrediente_nome || riga.ingrediente_id || '').trim()
+			if (!nomeIngrediente) continue
+			dbManager.salvaLocale('ordine_fornitore_righe', {
+				ordine_id: ordineId,
+				ingrediente_id: null,
+				ingrediente_nome: nomeIngrediente,
+				quantita: Number(riga.quantita ?? 0),
+				prezzo: Number(riga.prezzo ?? 0),
+				quantita_ricevuta: Number(riga.quantita_ricevuta ?? 0),
+			}, userId)
+		}
+	})()
 }
 
 async function getOrdiniFornitori() {

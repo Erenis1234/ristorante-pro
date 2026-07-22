@@ -86,18 +86,26 @@ async function addMovimento(dati) {
 		throw new Error('Scorta insufficiente per registrare lo scarico')
 	}
 
-	const ingredienteAggiornato = await dbManager.salva('ingredienti', {
-		id: ingredienteId,
-		scorta: nuovaScorta,
-	}, userId)
+	// Transazione atomica: se una delle due scritture fallisce, nessuna delle
+	// due viene applicata (evita scorta aggiornata senza il relativo movimento
+	// registrato, o viceversa).
+	const db = dbManager.getDb()
+	const { ingredienteAggiornato, movimento } = db.transaction(() => {
+		const ingredienteAggiornato = dbManager.salvaLocale('ingredienti', {
+			id: ingredienteId,
+			scorta: nuovaScorta,
+		}, userId)
 
-	const movimento = await dbManager.salva('movimenti_magazzino', {
-		ingrediente_id: ingredienteId,
-		tipo,
-		quantita,
-		nota: dati?.nota || null,
-		data_movimento: dati?.data || new Date().toISOString(),
-	}, userId)
+		const movimento = dbManager.salvaLocale('movimenti_magazzino', {
+			ingrediente_id: ingredienteId,
+			tipo,
+			quantita,
+			nota: dati?.nota || null,
+			data_movimento: dati?.data || new Date().toISOString(),
+		}, userId)
+
+		return { ingredienteAggiornato, movimento }
+	})()
 
 	return {
 		ingrediente: normalizeIngrediente(ingredienteAggiornato.data),

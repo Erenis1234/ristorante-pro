@@ -57,30 +57,35 @@ function buildRicettaDettaglio(db, ricetta, userId) {
 	}
 }
 
-async function saveRecipeIngredients(db, ricettaId, ingredienti, userId) {
-	const currentRows = db.prepare(
-		'SELECT id FROM ricetta_ingredienti WHERE ricetta_id = ? AND user_id = ?'
-	).all(ricettaId, userId)
+function saveRecipeIngredients(db, ricettaId, ingredienti, userId) {
+	// Transazione atomica: elimina e reinserisce gli ingredienti in un unico
+	// blocco, cos\u00ec un errore a met\u00e0 non lascia la ricetta con ingredienti
+	// parzialmente cancellati o duplicati.
+	db.transaction(() => {
+		const currentRows = db.prepare(
+			'SELECT id FROM ricetta_ingredienti WHERE ricetta_id = ? AND user_id = ?'
+		).all(ricettaId, userId)
 
-	for (const row of currentRows) {
-		await dbManager.elimina('ricetta_ingredienti', row.id, userId)
-	}
+		for (const row of currentRows) {
+			dbManager.eliminaLocale('ricetta_ingredienti', row.id, userId)
+		}
 
-	for (const ingrediente of ingredienti) {
-		const nome = String(
-			ingrediente.nome || ingrediente.ingrediente_nome || ''
-		).trim()
-		if (!nome) continue
+		for (const ingrediente of ingredienti) {
+			const nome = String(
+				ingrediente.nome || ingrediente.ingrediente_nome || ''
+			).trim()
+			if (!nome) continue
 
-		await dbManager.salva('ricetta_ingredienti', {
-			ricetta_id: ricettaId,
-			ingrediente_id: null,
-			nome,
-			quantita: ingrediente.quantita,
-			unita_misura: ingrediente.unita_misura || 'g',
-			note: ingrediente.note || null,
-		}, userId)
-	}
+			dbManager.salvaLocale('ricetta_ingredienti', {
+				ricetta_id: ricettaId,
+				ingrediente_id: null,
+				nome,
+				quantita: ingrediente.quantita,
+				unita_misura: ingrediente.unita_misura || 'g',
+				note: ingrediente.note || null,
+			}, userId)
+		}
+	})()
 }
 
 async function getRicette() {

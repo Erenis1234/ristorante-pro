@@ -175,6 +175,65 @@ function leggiPerId(tabella, id, userId) {
 		.get(id, userId) || null
 }
 
+// ── Varianti sincrone, solo-locale ──────────────────────────────────────────
+// Da usare esclusivamente dentro un db.transaction() quando più scritture su
+// tabelle diverse devono essere atomiche: a differenza di salva()/elimina(),
+// non tentano la sync immediata verso Supabase (che è asincrona e quindi
+// incompatibile con le transazioni sincrone di better-sqlite3). La riga
+// finisce comunque in coda_sync e verrà sincronizzata dal worker periodico
+// (avviaSyncAutomatica) o dalla sync manuale.
+function salvaLocale(tabella, dati, userId) {
+	ensureValidTableName(tabella)
+
+	if (!userId) {
+		throw new Error('userId obbligatorio per il salvataggio')
+	}
+
+	const database = getDb()
+	const localRecord = upsertSQLite(database, tabella, dati || {}, userId)
+
+	enqueueSync(database, tabella, localRecord.id, {
+		...localRecord,
+		user_id: userId,
+	}, userId)
+
+	return {
+		data: localRecord,
+		synced: false,
+		queued: true,
+	}
+}
+
+function eliminaLocale(tabella, id, userId) {
+	ensureValidTableName(tabella)
+
+	if (!userId) {
+		throw new Error('userId obbligatorio per l\'eliminazione')
+	}
+
+	const database = getDb()
+	const existing = leggiPerId(tabella, id, userId)
+
+	if (!existing) {
+		return {
+			deleted: false,
+			notFound: true,
+		}
+	}
+
+	database.prepare(`DELETE FROM ${tabella} WHERE id = ? AND user_id = ?`).run(id, userId)
+	enqueueSync(database, tabella, id, { id, user_id: userId }, userId)
+	database.prepare(
+		`UPDATE coda_sync SET azione = 'delete' WHERE id = last_insert_rowid()`
+	).run()
+
+	return {
+		deleted: true,
+		synced: false,
+		queued: true,
+	}
+}
+
 async function elimina(tabella, id, userId) {
 	ensureValidTableName(tabella)
 
@@ -248,4 +307,6 @@ module.exports = {
 	leggi,
 	leggiPerId,
 	elimina,
+	salvaLocale,
+	eliminaLocale,
 }

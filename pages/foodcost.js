@@ -7,8 +7,8 @@ var state = {
 	noticeMessage: '',
 	records: [],
 	simulator: {
-		piattoId: '',
-		piattoNome: '',
+		ricettaId: '',
+		ricettaNome: '',
 		prezzoVendita: '',
 		loading: false,
 		error: '',
@@ -146,13 +146,13 @@ function renderTableRows() {
 		var status = getStatusConfig(record.food_cost_pct)
 		return `
 		<tr>
-			<td>${escapeHtml(record.piatto_nome || 'Piatto')}</td>
+			<td>${escapeHtml(record.ricetta_nome || 'Ricetta')}</td>
 			<td class="td-right td-mono">${fmtCurrency(record.costo_ingredienti)}</td>
 			<td class="td-right td-mono">${fmtCurrency(record.prezzo_vendita)}</td>
 			<td class="td-right td-mono">${fmtPct(record.food_cost_pct)}</td>
 			<td class="td-center"><span class="badge ${status.className}">${status.label}</span></td>
 			<td class="td-right">
-				<button class="btn btn-secondary btn-sm" data-action="open-detail" data-id="${record.piatto_id}">📋 Dettaglio</button>
+				<button class="btn btn-secondary btn-sm" data-action="open-detail" data-id="${record.ricetta_id}">📋 Dettaglio</button>
 			</td>
 		</tr>`
 	}).join('')
@@ -160,13 +160,13 @@ function renderTableRows() {
 
 // ── Render: simulator ─────────────────────────────────────────────────────────
 
-function renderSimulatorPiattoOptions() {
-	var current = String(state.simulator.piattoId || '')
-	var options = ['<option value="">— Seleziona piatto —</option>']
+function renderSimulatorRicettaOptions() {
+	var current = String(state.simulator.ricettaId || '')
+	var options = ['<option value="">— Seleziona ricetta —</option>']
 	state.records.forEach(function (record) {
-		var id = String(record.piatto_id)
+		var id = String(record.ricetta_id)
 		var selected = current === id ? ' selected' : ''
-		options.push(`<option value="${id}"${selected}>${escapeHtml(record.piatto_nome || 'Piatto')}</option>`)
+		options.push(`<option value="${id}"${selected}>${escapeHtml(record.ricetta_nome || 'Ricetta')}</option>`)
 	})
 	return options.join('')
 }
@@ -235,7 +235,7 @@ function renderSimulatorResult() {
 				<div style="font-size:18px; font-weight:700;">${fmtCurrency(calc.costoIngredienti)}</div>
 			</div>
 			<div style="background:var(--card); border:2px solid var(--primary); border-radius:8px; padding:10px;">
-				<div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">💰 Costo totale piatto</div>
+				<div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">💰 Costo totale ricetta</div>
 				<div style="font-size:20px; font-weight:800; color:var(--primary);">${fmtCurrency(calc.costoIngredienti)}</div>
 			</div>
 		</div>
@@ -277,13 +277,13 @@ function renderSimulatorBody() {
 	return `
 	<div style="margin-top:16px;">
 
-		<!-- Nome piatto -->
+		<!-- Nome ricetta -->
 		<div style="background:var(--secondary); border-radius:10px; padding:12px 14px; margin-bottom:16px; display:flex; align-items:center; gap:12px;">
-			<div style="font-size:13px; font-weight:700; white-space:nowrap;">🍽️ Nome piatto</div>
+			<div style="font-size:13px; font-weight:700; white-space:nowrap;">🍽️ Nome ricetta</div>
 			<input type="text" placeholder="Es. Spaghetti alla carbonara"
 				style="${INPUT_STYLE} flex:1;"
-				value="${escapeHtml(String(sim.piattoNome))}"
-				data-action="sim-nome-piatto-input">
+				value="${escapeHtml(String(sim.ricettaNome))}"
+				data-action="sim-nome-ricetta-input">
 		</div>
 
 		<!-- Form aggiungi ingrediente -->
@@ -312,7 +312,7 @@ function renderSimulatorBody() {
 
 		<!-- Lista ingredienti -->
 		<div style="margin-bottom:16px;">
-			<div style="font-size:13px; font-weight:700; margin-bottom:8px; color:var(--text);">🥗 Ingredienti del piatto</div>
+			<div style="font-size:13px; font-weight:700; margin-bottom:8px; color:var(--text);">🥗 Ingredienti della ricetta</div>
 			<table style="width:100%; border-collapse:collapse;">
 				<thead>
 					<tr style="border-bottom:2px solid var(--border);">
@@ -356,7 +356,7 @@ function renderSimulatorBody() {
 			<button class="btn btn-primary" data-action="sim-salva" ${sim.saving ? 'disabled' : ''}>
 				${sim.saving ? '⏳ Salvataggio...' : '💾 Salva simulazione'}
 			</button>
-			${sim.piattoNome ? `<span style="font-size:12px; color:var(--text-muted);">Aggiunge <strong>${escapeHtml(sim.piattoNome)}</strong> nell'analisi food cost</span>` : `<span style="font-size:12px; color:var(--text-muted);">Inserisci il nome del piatto per poter salvare</span>`}
+			${sim.ricettaNome ? `<span style="font-size:12px; color:var(--text-muted);">Aggiunge <strong>${escapeHtml(sim.ricettaNome)}</strong> nell'analisi food cost</span>` : `<span style="font-size:12px; color:var(--text-muted);">Inserisci il nome della ricetta per poter salvare</span>`}
 		</div>
 		${sim.saveError ? `<div style="color:var(--danger); font-size:12px; margin-top:6px;">⚠️ ${escapeHtml(sim.saveError)}</div>` : ''}
 		` : ''}
@@ -464,7 +464,7 @@ function renderDetailModal() {
 		<div class="modal modal-lg" role="dialog" aria-modal="true" aria-label="Dettaglio food cost">
 			<div class="modal-header">
 				<div>
-					<div class="modal-title">Dettaglio: ${escapeHtml(record.piatto_nome || 'Piatto')}</div>
+					<div class="modal-title">Dettaglio: ${escapeHtml(record.ricetta_nome || 'Ricetta')}</div>
 					<div class="modal-subtitle">Analisi ingredienti e marginalità</div>
 				</div>
 				<button class="modal-close" type="button" data-action="close-detail">×</button>
@@ -552,12 +552,12 @@ function render() {
 		</div>
 
 		<div class="card" style="margin-top:16px;">
-			<div class="section-title">Analisi food cost per piatto</div>
+			<div class="section-title">Analisi food cost per ricetta</div>
 			<div class="table-wrapper">
 				<table>
 					<thead>
 						<tr>
-							<th>Piatto</th>
+							<th>Ricetta</th>
 							<th class="th-right">Costo ingredienti</th>
 							<th class="th-right">Prezzo vendita</th>
 							<th class="th-right">Food cost %</th>
@@ -571,8 +571,8 @@ function render() {
 			${noData ? `
 			<div class="empty-state" style="padding:24px 16px;">
 				<div class="empty-state-icon">🍽️</div>
-				<div class="empty-state-title">Nessun piatto disponibile</div>
-				<div class="empty-state-sub">Aggiungi piatti e ingredienti per avviare l'analisi food cost.</div>
+				<div class="empty-state-title">Nessuna ricetta disponibile</div>
+				<div class="empty-state-sub">Aggiungi ricette e ingredienti per avviare l'analisi food cost.</div>
 			</div>` : ''}
 		</div>
 
@@ -701,28 +701,28 @@ async function refreshData() {
 	state.records = Array.isArray(records) ? records : []
 }
 
-async function loadSimulatorPiatto(piattoId) {
-	if (!piattoId) {
-		state.simulator.piattoId = ''
-		state.simulator.piattoNome = ''
+async function loadSimulatorRicetta(ricettaId) {
+	if (!ricettaId) {
+		state.simulator.ricettaId = ''
+		state.simulator.ricettaNome = ''
 		updateSimulatorBody()
 		return
 	}
 
-	state.simulator.piattoId = String(piattoId)
+	state.simulator.ricettaId = String(ricettaId)
 	state.simulator.loading = true
 	state.simulator.error = ''
 	state.simulator.saveError = ''
 	updateSimulatorBody()
 
 	try {
-		var data = await window.api.foodcost.getFoodcostPiatto(Number(piattoId))
-		state.simulator.piattoNome = data.piatto_nome || ''
-		// Pre-popola prezzo di vendita con quello attuale del piatto
+		var data = await window.api.foodcost.getFoodcostRicetta(Number(ricettaId))
+		state.simulator.ricettaNome = data.ricetta_nome || ''
+		// Pre-popola prezzo di vendita con quello attuale della ricetta
 		if (!state.simulator.prezzoVendita) {
 			state.simulator.prezzoVendita = String(toNumber(data.prezzo_vendita) || '')
 		}
-		// Aggiunge gli ingredienti del piatto alla lista (come voci semplici nome + costo)
+		// Aggiunge gli ingredienti della ricetta alla lista (come voci semplici nome + costo)
 		var nuovi = (Array.isArray(data.ingredienti) ? data.ingredienti : []).map(function (ing) {
 			var costo = calcIngredientCost(ing.quantita, ing.unita_misura, ing.prezzo_kg)
 			return {
@@ -733,7 +733,7 @@ async function loadSimulatorPiatto(piattoId) {
 		})
 		state.simulator.ingredienti = state.simulator.ingredienti.concat(nuovi)
 	} catch (err) {
-		state.simulator.error = err && err.message ? err.message : 'Errore caricamento piatto'
+		state.simulator.error = err && err.message ? err.message : 'Errore caricamento ricetta'
 	} finally {
 		state.simulator.loading = false
 		updateSimulatorBody()
@@ -750,7 +750,7 @@ function closeDetailModal() {
 	rerender()
 }
 
-async function openDetailModal(piattoId) {
+async function openDetailModal(ricettaId) {
 	state.detailModal.open = true
 	state.detailModal.loading = true
 	state.detailModal.error = ''
@@ -758,7 +758,7 @@ async function openDetailModal(piattoId) {
 	rerender()
 
 	try {
-		state.detailModal.record = await window.api.foodcost.getFoodcostPiatto(Number(piattoId))
+		state.detailModal.record = await window.api.foodcost.getFoodcostRicetta(Number(ricettaId))
 	} catch (err) {
 		state.detailModal.error = err && err.message ? err.message : 'Impossibile caricare il dettaglio'
 	} finally {
@@ -770,8 +770,8 @@ async function openDetailModal(piattoId) {
 async function salvaSimulazione() {
 	var sim = state.simulator
 
-	if (!sim.piattoNome || !sim.piattoNome.trim()) {
-		sim.saveError = 'Inserisci il nome del piatto prima di salvare'
+	if (!sim.ricettaNome || !sim.ricettaNome.trim()) {
+		sim.saveError = 'Inserisci il nome della ricetta prima di salvare'
 		updateSimulatorBody()
 		return
 	}
@@ -789,16 +789,16 @@ async function salvaSimulazione() {
 
 	try {
 		await window.api.foodcost.salvaSimulazione({
-			nome: sim.piattoNome.trim(),
+			nome: sim.ricettaNome.trim(),
 			prezzo: prezzoVendita,
 			ingredienti: sim.ingredienti,
 		})
 		await refreshData()
-		state.noticeMessage = '"' + sim.piattoNome.trim() + '" aggiunto all\'analisi food cost'
+		state.noticeMessage = '"' + sim.ricettaNome.trim() + '" aggiunto all\'analisi food cost'
 		sim.saving = false
 		sim.ingredienti = []
 		sim.prezzoVendita = ''
-		sim.piattoNome = ''
+		sim.ricettaNome = ''
 		sim.saveError = ''
 		sim.editingIngIdx = null
 		rerender()
@@ -927,8 +927,8 @@ function initEvents(container) {
 		if (action === 'sim-reset') {
 			state.simulator.ingredienti = []
 			state.simulator.prezzoVendita = ''
-			state.simulator.piattoId = ''
-			state.simulator.piattoNome = ''
+			state.simulator.ricettaId = ''
+			state.simulator.ricettaNome = ''
 			state.simulator.error = ''
 			state.simulator.saveError = ''
 			state.simulator.editingIngIdx = null
@@ -937,12 +937,12 @@ function initEvents(container) {
 		}
 	})
 
-	// Change event: piatto select only
+	// Change event: selezione ricetta only
 	container.addEventListener('change', function (event) {
 		var target = event.target
 		if (!(target instanceof Element)) return
-		if (target.getAttribute('data-action') === 'sim-piatto-select') {
-			loadSimulatorPiatto(target.value)
+		if (target.getAttribute('data-action') === 'sim-ricetta-select') {
+			loadSimulatorRicetta(target.value)
 		}
 	})
 
@@ -961,8 +961,8 @@ function initEvents(container) {
 			return
 		}
 
-		if (action === 'sim-nome-piatto-input') {
-			state.simulator.piattoNome = target.value
+		if (action === 'sim-nome-ricetta-input') {
+			state.simulator.ricettaNome = target.value
 			return
 		}
 

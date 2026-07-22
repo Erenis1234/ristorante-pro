@@ -42,31 +42,34 @@ function getDb() {
 	return dbManager.getDb()
 }
 
-function getIngredientiPiatto(db, piattoId, userId) {
+function getIngredientiRicetta(db, ricettaId, userId) {
 	return db.prepare(`
 		SELECT
-			pi.id,
-			pi.piatto_id,
-			pi.ingrediente_id,
-			pi.quantita,
-			pi.unita_misura,
+			ri.id,
+			ri.ricetta_id,
+			ri.ingrediente_id,
+			ri.nome,
+			ri.quantita,
+			ri.unita_misura,
 			i.nome AS ingrediente_nome,
 			i.prezzo_kg,
-			i.categoria AS ingrediente_categoria,
-			i.unita_misura AS ingrediente_unita_misura
-		FROM piatto_ingredienti pi
-		JOIN ingredienti i ON i.id = pi.ingrediente_id
-		WHERE pi.piatto_id = ? AND (pi.user_id = ? OR pi.user_id IS NULL) AND (i.user_id = ? OR i.user_id IS NULL)
-		ORDER BY i.nome ASC
-	`).all(piattoId, userId, userId).map(row => {
+			i.categoria AS ingrediente_categoria
+		FROM ricetta_ingredienti ri
+		LEFT JOIN ingredienti i ON i.id = ri.ingrediente_id AND (i.user_id = ? OR i.user_id IS NULL)
+		WHERE ri.ricetta_id = ? AND (ri.user_id = ? OR ri.user_id IS NULL)
+		ORDER BY ri.nome ASC
+	`).all(userId, ricettaId, userId).map(row => {
+		// prezzo_kg è null se l'ingrediente non è collegato al catalogo (testo libero): costo 0
+		const prezzoKg = row.prezzo_kg !== null && row.prezzo_kg !== undefined ? row.prezzo_kg : 0
 		const costoUnitario = ['g', 'ml'].includes((row.unita_misura || '').toLowerCase())
-			? Number(row.prezzo_kg || 0) / 1000
-			: Number(row.prezzo_kg || 0)
+			? Number(prezzoKg) / 1000
+			: Number(prezzoKg)
 
 		return {
 			...row,
+			ingrediente_nome: row.ingrediente_nome || row.nome,
 			costo_unitario: round(costoUnitario, 4),
-			costo_totale: round(calculateIngredientCost(row.quantita, row.unita_misura, row.prezzo_kg), 4),
+			costo_totale: round(calculateIngredientCost(row.quantita, row.unita_misura, prezzoKg), 4),
 		}
 	})
 }
@@ -91,25 +94,28 @@ function getStatoFoodCost(percentuale) {
 	return 'critico'
 }
 
-function buildFoodCostRecord(db, piatto, userId, prezzoOverride) {
-	const ingredienti = getIngredientiPiatto(db, piatto.id, userId)
-	const prezzoVendita = prezzoOverride !== undefined ? Number(prezzoOverride) : Number(piatto.prezzo || 0)
-	const costoIngredienti = round(
+function buildFoodCostRecord(db, ricetta, userId, prezzoOverride) {
+	const ingredienti = getIngredientiRicetta(db, ricetta.id, userId)
+	const porzioni = Number(ricetta.porzioni) > 0 ? Number(ricetta.porzioni) : 1
+	const prezzoVendita = prezzoOverride !== undefined ? Number(prezzoOverride) : Number(ricetta.prezzo_vendita || 0)
+	const costoTotaleRicetta = round(
 		ingredienti.reduce((sum, ingrediente) => sum + Number(ingrediente.costo_totale || 0), 0),
 		3
 	)
-	const margine = round(prezzoVendita - costoIngredienti, 2)
+	const costoPerPorzione = round(costoTotaleRicetta / porzioni, 3)
+	const margine = round(prezzoVendita - costoPerPorzione, 2)
 	const percentuale = prezzoVendita > 0
-		? round((costoIngredienti / prezzoVendita) * 100, 2)
+		? round((costoPerPorzione / prezzoVendita) * 100, 2)
 		: null
 
 	return {
-		piatto_id: piatto.id,
-		piatto_nome: piatto.nome,
-		categoria_nome: piatto.categoria_nome,
-		disponibile: piatto.disponibile,
+		ricetta_id: ricetta.id,
+		ricetta_nome: ricetta.nome,
+		categoria: ricetta.categoria,
+		porzioni,
 		prezzo_vendita: round(prezzoVendita, 2),
-		costo_ingredienti: costoIngredienti,
+		costo_ingredienti: costoPerPorzione,
+		costo_totale_ricetta: costoTotaleRicetta,
 		margine,
 		percentuale,
 		food_cost_pct: percentuale,
@@ -118,60 +124,59 @@ function buildFoodCostRecord(db, piatto, userId, prezzoOverride) {
 	}
 }
 
-function getPiattiQuery(db, userId, piattoId = null) {
-	const hasPiatto = piattoId !== null && piattoId !== undefined
-	const wherePiatto = hasPiatto ? 'AND p.id = ?' : ''
-	const params = hasPiatto ? [userId, userId, piattoId] : [userId, userId]
+function getRicetteQuery(db, userId, ricettaId = null) {
+	const hasRicetta = ricettaId !== null && ricettaId !== undefined
+	const whereRicetta = hasRicetta ? 'AND r.id = ?' : ''
+	const params = hasRicetta ? [userId, ricettaId] : [userId]
 
 	return db.prepare(`
 		SELECT
-			p.id,
-			p.nome,
-			p.prezzo,
-			p.disponibile,
-			c.nome AS categoria_nome
-		FROM piatti p
-		LEFT JOIN categorie c ON c.id = p.categoria_id AND (c.user_id = ? OR c.user_id IS NULL)
-		WHERE (p.user_id = ? OR p.user_id IS NULL) ${wherePiatto}
-		ORDER BY c.ordine, p.nome
+			r.id,
+			r.nome,
+			r.porzioni,
+			r.categoria,
+			r.prezzo_vendita
+		FROM ricette r
+		WHERE (r.user_id = ? OR r.user_id IS NULL) ${whereRicetta}
+		ORDER BY r.categoria, r.nome
 	`).all(...params)
 }
 
 async function getFoodcostTutti() {
 	const userId = getUserIdOrThrow()
 	const db = getDb()
-	const piatti = getPiattiQuery(db, userId)
+	const ricette = getRicetteQuery(db, userId)
 
-	return piatti.map(piatto => buildFoodCostRecord(db, piatto, userId))
+	return ricette.map(ricetta => buildFoodCostRecord(db, ricetta, userId))
 }
 
-async function getFoodcostPiatto(piattoId) {
+async function getFoodcostRicetta(ricettaId) {
 	const userId = getUserIdOrThrow()
 	const db = getDb()
-	const piatto = getPiattiQuery(db, userId, piattoId)[0]
+	const ricetta = getRicetteQuery(db, userId, ricettaId)[0]
 
-	if (!piatto) {
-		throw new Error('Piatto non trovato')
+	if (!ricetta) {
+		throw new Error('Ricetta non trovata')
 	}
 
-	return buildFoodCostRecord(db, piatto, userId)
+	return buildFoodCostRecord(db, ricetta, userId)
 }
 
-async function simulaPrezzo(piattoId, nuovoPrezzo) {
+async function simulaPrezzo(ricettaId, nuovoPrezzo) {
 	const userId = getUserIdOrThrow()
 	const db = getDb()
-	const piatto = getPiattiQuery(db, userId, piattoId)[0]
+	const ricetta = getRicetteQuery(db, userId, ricettaId)[0]
 
-	if (!piatto) {
-		throw new Error('Piatto non trovato')
+	if (!ricetta) {
+		throw new Error('Ricetta non trovata')
 	}
 
-	const simulazione = buildFoodCostRecord(db, piatto, userId, nuovoPrezzo)
+	const simulazione = buildFoodCostRecord(db, ricetta, userId, nuovoPrezzo)
 
 	return {
-		piatto_id: simulazione.piatto_id,
-		piatto_nome: simulazione.piatto_nome,
-		prezzo_attuale: round(Number(piatto.prezzo || 0), 2),
+		ricetta_id: simulazione.ricetta_id,
+		ricetta_nome: simulazione.ricetta_nome,
+		prezzo_attuale: round(Number(ricetta.prezzo_vendita || 0), 2),
 		nuovo_prezzo: round(Number(nuovoPrezzo || 0), 2),
 		costo_ingredienti: simulazione.costo_ingredienti,
 		margine: simulazione.margine,
@@ -186,15 +191,15 @@ async function salvaSimulazioneFoodcost({ nome, prezzo, ingredienti }) {
 	const db = getDb()
 
 	db.transaction(() => {
-		// 1. Crea il piatto
+		// 1. Crea la ricetta (porzioni=1: il simulatore non gestisce il numero di porzioni)
 		const now = db.prepare("SELECT datetime('now') AS now").get().now
-		const piattoResult = db.prepare(`
-			INSERT INTO piatti (nome, prezzo, disponibile, user_id, updated_at)
-			VALUES (?, ?, 1, ?, ?)
+		const ricettaResult = db.prepare(`
+			INSERT INTO ricette (nome, porzioni, prezzo_vendita, user_id, updated_at)
+			VALUES (?, 1, ?, ?, ?)
 		`).run(nome, Number(prezzo) || 0, userId, now)
-		const piattoId = piattoResult.lastInsertRowid
+		const ricettaId = ricettaResult.lastInsertRowid
 
-		// 2. Per ogni ingrediente: trova/crea per questo utente + inserisci in piatto_ingredienti
+		// 2. Per ogni ingrediente: trova/crea per questo utente + collega in ricetta_ingredienti
 		for (const ing of (ingredienti || [])) {
 			const ingNome = String(ing.nome || '').trim()
 			const costo = Number(ing.costo) || 0
@@ -218,24 +223,24 @@ async function salvaSimulazioneFoodcost({ nome, prezzo, ingredienti }) {
 				ingId = ins.lastInsertRowid
 			}
 
-			// Inserisci piatto_ingredienti (quantita=1, unita_misura='pz' → costo_totale = prezzo_kg)
+			// Collega l'ingrediente alla ricetta (quantita=1, unita_misura='pz' → costo_totale = prezzo_kg)
 			db.prepare(`
-				INSERT OR IGNORE INTO piatto_ingredienti (piatto_id, ingrediente_id, quantita, unita_misura, user_id, updated_at)
-				VALUES (?, ?, 1, 'pz', ?, ?)
-			`).run(piattoId, ingId, userId, now)
+				INSERT INTO ricetta_ingredienti (ricetta_id, ingrediente_id, nome, quantita, unita_misura, user_id, updated_at)
+				VALUES (?, ?, ?, 1, 'pz', ?, ?)
+			`).run(ricettaId, ingId, ingNome, userId, now)
 		}
 	})()
 
-	// Ritorna il food cost calcolato del piatto appena creato
-	const piatto = db.prepare(`SELECT * FROM piatti WHERE nome = ? AND user_id = ? ORDER BY id DESC LIMIT 1`).get(nome, userId)
-	if (!piatto) throw new Error('Errore creazione piatto')
-	return buildFoodCostRecord(db, piatto, userId)
+	// Ritorna il food cost calcolato della ricetta appena creata
+	const ricetta = db.prepare(`SELECT * FROM ricette WHERE nome = ? AND user_id = ? ORDER BY id DESC LIMIT 1`).get(nome, userId)
+	if (!ricetta) throw new Error('Errore creazione ricetta')
+	return buildFoodCostRecord(db, ricetta, userId)
 }
 
 function registerFoodcostIpcHandlers() {
 	registerHandler('get-foodcost-tutti', async () => getFoodcostTutti())
-	registerHandler('get-foodcost-piatto', async (_event, piattoId) => getFoodcostPiatto(piattoId))
-	registerHandler('simula-prezzo', async (_event, piattoId, nuovoPrezzo) => simulaPrezzo(piattoId, nuovoPrezzo))
+	registerHandler('get-foodcost-ricetta', async (_event, ricettaId) => getFoodcostRicetta(ricettaId))
+	registerHandler('simula-prezzo', async (_event, ricettaId, nuovoPrezzo) => simulaPrezzo(ricettaId, nuovoPrezzo))
 	registerHandler('salva-simulazione-foodcost', async (_event, dati) => salvaSimulazioneFoodcost(dati))
 }
 

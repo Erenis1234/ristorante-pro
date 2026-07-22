@@ -76,10 +76,10 @@ contextBridge.exposeInMainWorld('api', {
 
   // ── FOOD COST ─────────────────────────────────────────────────────────────
   foodcost: {
-    getFoodcostTutti:         ()                 => call('get-foodcost-tutti'),
-    getFoodcostPiatto:        (piattoId)         => call('get-foodcost-piatto', piattoId),
-    simulaPrezzo:             (piattoId, prezzo) => call('simula-prezzo', piattoId, prezzo),
-    salvaSimulazione:         (dati)             => call('salva-simulazione-foodcost', dati),
+    getFoodcostTutti:         ()                  => call('get-foodcost-tutti'),
+    getFoodcostRicetta:       (ricettaId)         => call('get-foodcost-ricetta', ricettaId),
+    simulaPrezzo:             (ricettaId, prezzo) => call('simula-prezzo', ricettaId, prezzo),
+    salvaSimulazione:         (dati)              => call('salva-simulazione-foodcost', dati),
   },
 
   // ── PERSONALE ─────────────────────────────────────────────────────────────

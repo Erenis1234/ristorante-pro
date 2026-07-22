@@ -58,6 +58,7 @@ function createTables(db) {
 			temperatura         TEXT,
 			categoria           TEXT,
 			foto                TEXT,
+			prezzo_vendita      REAL,
 			user_id             TEXT,
 			updated_at          TEXT    DEFAULT (datetime('now'))
 		);
@@ -203,6 +204,7 @@ function createTables(db) {
 	_migrateRicetteTemperatura(db)
 	_migrateRicetteCategoriaFoto(db)
 	_migrateMenuTipo(db)
+	_migrateRicettePrezzoVendita(db)
 }
 
 // Aggiunge colonna `tipo` a `menu` per i DB creati prima dell'introduzione del campo
@@ -294,6 +296,15 @@ function _migrateRicetteCategoriaFoto(db) {
 	}
 	if (!cols.some(c => c.name === 'foto')) {
 		db.exec(`ALTER TABLE ricette ADD COLUMN foto TEXT`)
+	}
+}
+
+// Aggiunge colonna `prezzo_vendita` a ricette se non esiste (usata dal food cost)
+function _migrateRicettePrezzoVendita(db) {
+	const cols = db.pragma('table_info(ricette)')
+	if (!cols.length) return
+	if (!cols.some(c => c.name === 'prezzo_vendita')) {
+		db.exec(`ALTER TABLE ricette ADD COLUMN prezzo_vendita REAL`)
 	}
 }
 

@@ -74,6 +74,24 @@ function createTables(db) {
 			updated_at      TEXT    DEFAULT (datetime('now'))
 		);
 
+		CREATE TABLE IF NOT EXISTS menu (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			nome        TEXT    NOT NULL,
+			descrizione TEXT,
+			user_id     TEXT,
+			updated_at  TEXT    DEFAULT (datetime('now'))
+		);
+
+		CREATE TABLE IF NOT EXISTS menu_voci (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			menu_id     INTEGER NOT NULL REFERENCES menu(id) ON DELETE CASCADE,
+			nome        TEXT    NOT NULL DEFAULT '',
+			prezzo      REAL    NOT NULL DEFAULT 0,
+			ordine      INTEGER NOT NULL DEFAULT 0,
+			user_id     TEXT,
+			updated_at  TEXT    DEFAULT (datetime('now'))
+		);
+
 		CREATE TABLE IF NOT EXISTS personale (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
 			nome       TEXT    NOT NULL,

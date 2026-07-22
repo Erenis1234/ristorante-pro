@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Stato attuale del repo, utile da sapere prima di proporre comandi che non esistono:
 - Nessuno script di test (`npm test` non è definito, non ci sono file `*.test.js` nel progetto).
 - `eslint` è tra le devDependencies ma non c'è nessun file di configurazione (`.eslintrc*`, `eslint.config.*`) né uno script `lint` in `package.json`.
-- Non c'è una cartella `.git`: il progetto non è ancora sotto controllo di versione.
+- Il progetto è sotto controllo di versione Git (branch `master`), con `.gitignore` che esclude `.env`, `node_modules/`, `dist/` e i file `*.db`.
 
 ## Architettura
 

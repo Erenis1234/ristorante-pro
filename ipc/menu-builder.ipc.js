@@ -39,6 +39,7 @@ function buildMenuDettaglio(db, menu, userId) {
 		id: menu.id,
 		nome: menu.nome,
 		descrizione: menu.descrizione || null,
+		tipo: menu.tipo === 'settimanale' ? 'settimanale' : 'giornaliero',
 		voci: getVociMenu(db, menu.id, userId),
 		updated_at: menu.updated_at,
 	}
@@ -89,6 +90,7 @@ async function addMenu(dati) {
 	const menuResult = await dbManager.salva('menu', {
 		nome: dati?.nome,
 		descrizione: dati?.descrizione || null,
+		tipo: dati?.tipo === 'settimanale' ? 'settimanale' : 'giornaliero',
 	}, userId)
 
 	syncVociMenu(menuResult.data.id, voci, userId)
@@ -110,6 +112,7 @@ async function updateMenu(dati) {
 		id: dati.id,
 		nome: dati?.nome ?? existing.nome,
 		descrizione: dati?.descrizione !== undefined ? dati.descrizione : existing.descrizione,
+		tipo: dati?.tipo !== undefined ? (dati.tipo === 'settimanale' ? 'settimanale' : 'giornaliero') : existing.tipo,
 	}, userId)
 
 	syncVociMenu(menuResult.data.id, voci, userId)

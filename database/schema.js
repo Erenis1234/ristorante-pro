@@ -78,6 +78,7 @@ function createTables(db) {
 			id          INTEGER PRIMARY KEY AUTOINCREMENT,
 			nome        TEXT    NOT NULL,
 			descrizione TEXT,
+			tipo        TEXT    NOT NULL DEFAULT 'giornaliero',
 			user_id     TEXT,
 			updated_at  TEXT    DEFAULT (datetime('now'))
 		);
@@ -201,6 +202,16 @@ function createTables(db) {
 	_migrateOrdineFornitoreRighe(db)
 	_migrateRicetteTemperatura(db)
 	_migrateRicetteCategoriaFoto(db)
+	_migrateMenuTipo(db)
+}
+
+// Aggiunge colonna `tipo` a `menu` per i DB creati prima dell'introduzione del campo
+function _migrateMenuTipo(db) {
+	const cols = db.pragma('table_info(menu)')
+	if (!cols.length) return
+	if (!cols.some(c => c.name === 'tipo')) {
+		db.exec(`ALTER TABLE menu ADD COLUMN tipo TEXT NOT NULL DEFAULT 'giornaliero'`)
+	}
 }
 
 // Aggiunge colonna `nome` e rende `ingrediente_id` nullable in ricetta_ingredienti

@@ -52,6 +52,8 @@ function buildRicettaDettaglio(db, ricetta, userId) {
 		porzioni: ricetta.porzioni,
 		tempo_preparazione: ricetta.tempo_preparazione,
 		temperatura: ricetta.temperatura || null,
+		categoria: ricetta.categoria || null,
+		foto: ricetta.foto || null,
 		ingredienti,
 		updated_at: ricetta.updated_at,
 	}
@@ -109,6 +111,8 @@ async function addRicetta(dati) {
 		porzioni: dati?.porzioni ?? 1,
 		tempo_preparazione: dati?.tempo_preparazione ?? 20,
 		temperatura: dati?.temperatura || null,
+		categoria: dati?.categoria || null,
+		foto: dati?.foto || null,
 	}, userId)
 
 	await saveRecipeIngredients(db, ricettaResult.data.id, ingredienti, userId)
@@ -132,6 +136,8 @@ async function updateRicetta(dati) {
 		porzioni: dati?.porzioni ?? existing.porzioni,
 		tempo_preparazione: dati?.tempo_preparazione ?? existing.tempo_preparazione,
 		temperatura: dati?.temperatura !== undefined ? dati.temperatura : existing.temperatura,
+		categoria: dati?.categoria !== undefined ? dati.categoria : existing.categoria,
+		foto: dati?.foto !== undefined ? dati.foto : existing.foto,
 	}, userId)
 
 	await saveRecipeIngredients(db, ricettaResult.data.id, ingredienti, userId)

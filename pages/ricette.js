@@ -6,6 +6,7 @@
     noticeMessage: "",
     searchQuery: "",
     ricette: [],
+    categoriaSelezionata: null, // null = vista categorie; "" = ricette senza categoria; altrimenti id categoria
     dettaglioRicetta: null,
     dettaglioLoading: false,
     dettaglioError: "",
@@ -21,9 +22,21 @@
         porzioni: "1",
         tempo_preparazione: "20",
         temperatura: "",
+        categoria: "",
+        foto: null, // stringa base64 (data URL) o null
       },
     },
   };
+
+  var CATEGORIE = [
+    { id: "antipasto", label: "Antipasti", icon: "\uD83E\uDD57" },
+    { id: "primo", label: "Primi piatti", icon: "\uD83C\uDF5D" },
+    { id: "secondo", label: "Secondi piatti", icon: "\uD83C\uDF56" },
+    { id: "dolce", label: "Dolci", icon: "\uD83C\uDF70" },
+    { id: "salsa", label: "Salse", icon: "\uD83E\uDD63" },
+  ];
+
+  var FOTO_MAX_SIZE = 3 * 1024 * 1024; // 3MB
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -41,10 +54,39 @@
 
   function getRicetteFiltrate() {
     var query = String(state.searchQuery || "").trim().toLowerCase();
-    if (!query) return state.ricette.slice();
+    var categoria = state.categoriaSelezionata;
+
     return state.ricette.filter(function (ricetta) {
+      var matchCategoria = categoria === ""
+        ? !(ricetta && ricetta.categoria)
+        : String((ricetta && ricetta.categoria) || "") === categoria;
+      if (!matchCategoria) return false;
+      if (!query) return true;
       return String(ricetta && ricetta.nome || "").toLowerCase().includes(query);
     });
+  }
+
+  function getCategoriaInfo(id) {
+    for (var i = 0; i < CATEGORIE.length; i++) {
+      if (CATEGORIE[i].id === id) return CATEGORIE[i];
+    }
+    return null;
+  }
+
+  function contaRicettePerCategoria(categoriaId) {
+    return state.ricette.filter(function (ricetta) {
+      if (categoriaId === "") return !(ricetta && ricetta.categoria);
+      return ricetta && ricetta.categoria === categoriaId;
+    }).length;
+  }
+
+  function renderCategoriaOptions(selected) {
+    var options = ['<option value=""' + (selected ? "" : " selected") + ">Nessuna categoria</option>"];
+    CATEGORIE.forEach(function (cat) {
+      var sel = cat.id === selected ? " selected" : "";
+      options.push(`<option value="${cat.id}"${sel}>${cat.icon} ${cat.label}</option>`);
+    });
+    return options.join("");
   }
 
   function formatTempo(value) {
@@ -71,6 +113,33 @@
 	</div>`;
   }
 
+  function renderCategorie() {
+    var cards = CATEGORIE.map(function (cat) {
+      var count = contaRicettePerCategoria(cat.id);
+      return `
+	<div class="card" style="cursor:pointer; text-align:center; padding:24px 16px;" data-action="open-categoria" data-categoria="${cat.id}">
+		<div style="font-size:34px; margin-bottom:10px;">${cat.icon}</div>
+		<div class="section-title" style="margin-bottom:4px; justify-content:center;">${cat.label}</div>
+		<div class="label">${count} ricett${count === 1 ? "a" : "e"}</div>
+	</div>`;
+    });
+
+    var senzaCategoria = contaRicettePerCategoria("");
+    if (senzaCategoria > 0) {
+      cards.push(`
+	<div class="card" style="cursor:pointer; text-align:center; padding:24px 16px;" data-action="open-categoria" data-categoria="">
+		<div style="font-size:34px; margin-bottom:10px;">📁</div>
+		<div class="section-title" style="margin-bottom:4px; justify-content:center;">Senza categoria</div>
+		<div class="label">${senzaCategoria} ricett${senzaCategoria === 1 ? "a" : "e"}</div>
+	</div>`);
+    }
+
+    return `
+	<div class="grid-auto">
+		${cards.join("")}
+	</div>`;
+  }
+
   function renderCards() {
     var ricette = getRicetteFiltrate();
     if (!ricette.length) {
@@ -90,8 +159,12 @@
         var tempo = formatTempo(ricetta && ricetta.tempo_preparazione);
         var temp = escapeHtml(ricetta && ricetta.temperatura ? ricetta.temperatura : "-");
         var nIng = Array.isArray(ricetta && ricetta.ingredienti) ? ricetta.ingredienti.length : 0;
+        var fotoHtml = ricetta && ricetta.foto
+          ? `<img src="${ricetta.foto}" alt="${nome}" style="width:100%; height:120px; object-fit:cover; border-radius:8px; margin-bottom:10px; cursor:pointer;" data-action="open-dettaglio" data-id="${ricetta.id}">`
+          : "";
         return `
 			<div class="card">
+				${fotoHtml}
 				<div class="section-title" style="margin-bottom: 8px; cursor:pointer;" data-action="open-dettaglio" data-id="${ricetta.id}">🍲 ${nome}</div>
 				<div class="label" style="margin-bottom: 3px;">Persone</div>
 				<div style="margin-bottom: 8px;">${porzioni}</div>
@@ -149,10 +222,15 @@
     var ingredienti = Array.isArray(ricetta.ingredienti)
       ? ricetta.ingredienti
       : [];
+    var categoriaInfo = getCategoriaInfo(ricetta.categoria);
+    var categoriaLabel = categoriaInfo
+      ? categoriaInfo.icon + " " + categoriaInfo.label
+      : "Senza categoria";
 
     return `
 	<div class="card" style="margin-top: 16px;">
 		<div class="section-title">Dettaglio ricetta: ${escapeHtml(ricetta.nome || "")}</div>
+		${ricetta.foto ? `<img src="${ricetta.foto}" alt="${escapeHtml(ricetta.nome || "")}" style="width:100%; max-height:220px; object-fit:cover; border-radius:8px; margin-bottom:14px;">` : ""}
 		<div class="grid-2" style="margin-bottom: 14px;">
 			<div>
 				<div class="label" style="margin-bottom: 4px;">Per quante persone</div>
@@ -163,8 +241,16 @@
 				<div>${formatTempo(ricetta.tempo_preparazione)}</div>
 			</div>
 		</div>
-		<div class="label" style="margin-bottom: 4px;">Temperatura</div>
-		<div style="margin-bottom: 14px;">${escapeHtml(ricetta.temperatura || "-")}</div>
+		<div class="grid-2" style="margin-bottom: 14px;">
+			<div>
+				<div class="label" style="margin-bottom: 4px;">Temperatura</div>
+				<div>${escapeHtml(ricetta.temperatura || "-")}</div>
+			</div>
+			<div>
+				<div class="label" style="margin-bottom: 4px;">Categoria</div>
+				<div>${escapeHtml(categoriaLabel)}</div>
+			</div>
+		</div>
 
 		<div class="table-wrapper">
 			<table>
@@ -295,6 +381,23 @@
 							<label class="form-label" for="ricetta-temperatura">Temperatura</label>
 							<input id="ricetta-temperatura" class="form-input" name="temperatura" maxlength="60" value="${escapeHtml(values.temperatura)}" placeholder="Es. 180°C, fuoco vivo">
 						</div>
+
+						<div class="form-group">
+							<label class="form-label" for="ricetta-categoria">Categoria</label>
+							<select id="ricetta-categoria" class="form-select" name="categoria">
+								${renderCategoriaOptions(values.categoria)}
+							</select>
+						</div>
+					</div>
+
+					<div class="form-group">
+						<label class="form-label" for="ricetta-foto">Foto (opzionale)</label>
+						<input id="ricetta-foto" type="file" accept="image/*" data-action="modal-foto-input">
+						${values.foto ? `
+						<div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
+							<img src="${values.foto}" alt="Anteprima foto ricetta" style="width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--border);">
+							<button type="button" class="btn btn-ghost btn-sm" data-action="modal-foto-rimuovi">🗑️ Rimuovi foto</button>
+						</div>` : ""}
 					</div>
 
 					<div class="form-group" style="margin-bottom: 0;">
@@ -323,9 +426,30 @@
       return renderError();
     }
 
-    return `
+    var vistaCategorie = state.categoriaSelezionata === null;
+
+    if (vistaCategorie) {
+      return `
 	<div class="card">
 		<div class="section-title">Gestione ricette</div>
+		<div class="tabella-toolbar" style="margin-bottom: 14px;">
+			<button class="btn btn-primary" data-action="open-create-modal">➕ Nuova ricetta</button>
+		</div>
+		${state.noticeMessage ? `<div class="card" style="margin-bottom: 14px; padding: 12px 14px;">${escapeHtml(state.noticeMessage)}</div>` : ""}
+		${renderCategorie()}
+	</div>
+	${renderModal()}`;
+    }
+
+    var categoriaInfo = getCategoriaInfo(state.categoriaSelezionata);
+    var categoriaLabel = categoriaInfo ? `${categoriaInfo.icon} ${categoriaInfo.label}` : "📁 Senza categoria";
+
+    return `
+	<div class="card">
+		<div class="section-title" style="display:flex; align-items:center; gap:10px;">
+			<button class="btn btn-secondary btn-sm" data-action="back-to-categorie">⬅️ Categorie</button>
+			<span>${escapeHtml(categoriaLabel)}</span>
+		</div>
 		<div class="tabella-toolbar" style="margin-bottom: 14px;">
 			<button class="btn btn-primary" data-action="open-create-modal">➕ Nuova ricetta</button>
 			<input class="form-input search-bar" data-action="search-ricette" value="${escapeHtml(state.searchQuery)}" placeholder="Cerca per nome...">
@@ -352,6 +476,7 @@
     state.modal.values.porzioni           = String(fd.get("porzioni") || "1");
     state.modal.values.tempo_preparazione = String(fd.get("tempo_preparazione") || "20");
     state.modal.values.temperatura        = String(fd.get("temperatura") || "").trim();
+    state.modal.values.categoria          = String(fd.get("categoria") || "").trim();
   }
 
   async function refreshRicette() {
@@ -378,6 +503,8 @@
       porzioni: "1",
       tempo_preparazione: "20",
       temperatura: "",
+      categoria: state.categoriaSelezionata ? state.categoriaSelezionata : "",
+      foto: null,
     };
     rerender();
   }
@@ -408,6 +535,8 @@
         porzioni: String(Math.max(1, Math.round(toNumber(dettaglio && dettaglio.porzioni)))),
         tempo_preparazione: String(Math.max(0, Math.round(toNumber(dettaglio && dettaglio.tempo_preparazione)))),
         temperatura: String(dettaglio && dettaglio.temperatura ? dettaglio.temperatura : ""),
+        categoria: String(dettaglio && dettaglio.categoria ? dettaglio.categoria : ""),
+        foto: dettaglio && dettaglio.foto ? dettaglio.foto : null,
       };
     } catch (error) {
       state.modal.loading = false;
@@ -458,6 +587,8 @@
       porzioni: Math.max(1, Math.round(toNumber(formData.get("porzioni")))),
       tempo_preparazione: Math.max(0, Math.round(toNumber(formData.get("tempo_preparazione")))),
       temperatura: String(formData.get("temperatura") || "").trim() || null,
+      categoria: String(formData.get("categoria") || "").trim() || null,
+      foto: state.modal.values.foto || null,
       ingredienti: state.modal.ingredienti.map(function (ing) {
         return {
           nome: ing.nome,
@@ -556,6 +687,24 @@
         return;
       }
 
+      if (action === "open-categoria") {
+        state.categoriaSelezionata = actionNode.hasAttribute("data-categoria")
+          ? actionNode.getAttribute("data-categoria")
+          : "";
+        state.searchQuery = "";
+        rerender();
+        return;
+      }
+
+      if (action === "back-to-categorie") {
+        state.categoriaSelezionata = null;
+        state.searchQuery = "";
+        state.dettaglioRicetta = null;
+        state.dettaglioError = "";
+        rerender();
+        return;
+      }
+
       if (action === "open-create-modal") {
         openCreateModal();
         return;
@@ -575,6 +724,13 @@
 
       if (action === "open-dettaglio") {
         openDettaglio(id);
+        return;
+      }
+
+      if (action === "modal-foto-rimuovi") {
+        captureModalFormValues();
+        state.modal.values.foto = null;
+        rerender();
         return;
       }
 
@@ -631,6 +787,45 @@
         state.searchQuery = target.value || "";
         rerender();
       }
+    });
+
+    container.addEventListener("change", function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) return;
+
+      var action = target.getAttribute("data-action");
+      if (action !== "modal-foto-input") return;
+
+      var file = target.files && target.files[0];
+      if (!file) return;
+
+      if (file.type.indexOf("image/") !== 0) {
+        captureModalFormValues();
+        state.modal.error = "Seleziona un file immagine valido";
+        rerender();
+        return;
+      }
+
+      if (file.size > FOTO_MAX_SIZE) {
+        captureModalFormValues();
+        state.modal.error = "L'immagine supera la dimensione massima di 3MB";
+        rerender();
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function () {
+        captureModalFormValues();
+        state.modal.values.foto = String(reader.result || "");
+        state.modal.error = "";
+        rerender();
+      };
+      reader.onerror = function () {
+        captureModalFormValues();
+        state.modal.error = "Impossibile leggere il file immagine selezionato";
+        rerender();
+      };
+      reader.readAsDataURL(file);
     });
 
     container.addEventListener("submit", function (event) {

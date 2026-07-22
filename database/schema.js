@@ -56,6 +56,8 @@ function createTables(db) {
 			porzioni            INTEGER NOT NULL DEFAULT 1,
 			tempo_preparazione  INTEGER DEFAULT 20,
 			temperatura         TEXT,
+			categoria           TEXT,
+			foto                TEXT,
 			user_id             TEXT,
 			updated_at          TEXT    DEFAULT (datetime('now'))
 		);
@@ -180,6 +182,7 @@ function createTables(db) {
 	_migrateRicettaIngredienti(db)
 	_migrateOrdineFornitoreRighe(db)
 	_migrateRicetteTemperatura(db)
+	_migrateRicetteCategoriaFoto(db)
 }
 
 // Aggiunge colonna `nome` e rende `ingrediente_id` nullable in ricetta_ingredienti
@@ -250,6 +253,19 @@ function _migrateRicetteTemperatura(db) {
 	const cols = db.pragma('table_info(ricette)')
 	if (!cols.length || cols.some(c => c.name === 'temperatura')) return
 	db.exec(`ALTER TABLE ricette ADD COLUMN temperatura TEXT`)
+}
+
+// Aggiunge colonne `categoria` (antipasto/primo/secondo/dolce/salsa) e `foto`
+// (immagine in base64) a ricette se non esistono
+function _migrateRicetteCategoriaFoto(db) {
+	const cols = db.pragma('table_info(ricette)')
+	if (!cols.length) return
+	if (!cols.some(c => c.name === 'categoria')) {
+		db.exec(`ALTER TABLE ricette ADD COLUMN categoria TEXT`)
+	}
+	if (!cols.some(c => c.name === 'foto')) {
+		db.exec(`ALTER TABLE ricette ADD COLUMN foto TEXT`)
+	}
 }
 
 module.exports = {

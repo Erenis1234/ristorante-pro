@@ -5,11 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Comandi
 
 - `npm start` — avvia l'app Electron in locale (`electron .`)
+- `npm test` — esegue i test con il test runner nativo di Node (`node --test`), nessuna dipendenza aggiuntiva. Copertura minima su `core/db-manager.js` in `core/db-manager.test.js` (isolamento per `user_id`, upsert, validazione nome tabella, coda_sync)
 - `npm run build` — build Windows (NSIS) con electron-builder, output in `dist/`
 - `npm run postinstall` — ricompila `better-sqlite3` per Electron (`electron-rebuild`), gira automaticamente dopo `npm install`
 
 Stato attuale del repo, utile da sapere prima di proporre comandi che non esistono:
-- Nessuno script di test (`npm test` non è definito, non ci sono file `*.test.js` nel progetto).
 - `eslint` è tra le devDependencies ma non c'è nessun file di configurazione (`.eslintrc*`, `eslint.config.*`) né uno script `lint` in `package.json`.
 - Il progetto è sotto controllo di versione Git (branch `master`), con `.gitignore` che esclude `.env`, `node_modules/`, `dist/` e i file `*.db`.
 

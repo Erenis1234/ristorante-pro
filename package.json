@@ -6,6 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test": "set ELECTRON_RUN_AS_NODE=1&& electron --test",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "build": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder"
   },

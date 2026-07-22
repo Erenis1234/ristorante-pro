@@ -56,6 +56,15 @@ contextBridge.exposeInMainWorld('api', {
     getRicettaDettaglio: (id)   => call('get-ricetta-dettaglio', id),
   },
 
+  // ── MENU BUILDER ──────────────────────────────────────────────────────────
+  menuBuilder: {
+    getMenu:          ()     => call('get-menu'),
+    addMenu:          (dati) => call('add-menu', dati),
+    updateMenu:       (dati) => call('update-menu', dati),
+    deleteMenu:       (id)   => call('delete-menu', id),
+    getMenuDettaglio: (id)   => call('get-menu-dettaglio', id),
+  },
+
   // ── ORDINI FORNITORI ──────────────────────────────────────────────────────
   ordini: {
     getOrdiniFornitori: ()              => call('get-ordini-fornitori'),

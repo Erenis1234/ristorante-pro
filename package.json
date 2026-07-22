@@ -1,0 +1,68 @@
+{
+  "name": "ristorante-pro",
+  "version": "1.0.0",
+  "author": "Ristorante Pro Team",
+  "description": "App Electron con database SQLite locale",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "build": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.1",
+    "better-sqlite3": "11.8.1",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-rebuild": "^3.2.9",
+    "eslint": "^10.1.0"
+  },
+  "build": {
+    "productName": "Ristorante Pro",
+    "appId": "com.ristorantepro.app",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "supabaseClient.js",
+      "index.html",
+      "style.css",
+      "database/**",
+      "core/**",
+      "ipc/**",
+      "pages/**",
+      "components/**",
+      "assets/**",
+      "node_modules/**"
+    ],
+    "directories": {
+      "output": "dist/"
+    },
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**"
+    ],
+    "extraResources": [
+      {
+        "from": ".env",
+        "to": ".env"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ristorante Pro"
+    }
+  }
+}

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="assets/icon.ico" type="image/x-icon" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.supabase.co;" />
+  <title>Ristorante Pro</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════
+       SCHERMATA LOGIN
+       Visibile all'avvio; nascosta dopo autenticazione
+  ══════════════════════════════════════════════════════════ -->
+  <div id="login-screen">
+    <div id="login-box">
+
+      <div id="login-logo">
+        <div id="login-logo-icon">🍽️</div>
+        <h1>Ristorante Pro</h1>
+        <p>Gestionale</p>
+      </div>
+
+      <div id="login-card">
+        <!-- Tab Accedi / Registrati -->
+        <div id="login-tab-bar">
+          <button class="login-tab active" data-tab="accedi">Accedi</button>
+          <button class="login-tab"        data-tab="registrati">Registrati</button>
+        </div>
+
+        <!-- Messaggi feedback -->
+        <div id="login-error"></div>
+        <div id="login-success"></div>
+
+        <!-- Form -->
+        <div class="form-group">
+          <label class="form-label" for="input-email">Email</label>
+          <input id="input-email" type="email" class="form-input"
+                 placeholder="chef@ristorante.it" autocomplete="email" />
+        </div>
+
+        <div class="form-group" id="group-password">
+          <label class="form-label" for="input-password">Password</label>
+          <input id="input-password" type="password" class="form-input"
+                 placeholder="••••••••" autocomplete="current-password" />
+        </div>
+
+        <button id="btn-accedi"     class="btn btn-primary btn-login-action">Accedi</button>
+        <button id="btn-registrati" class="btn btn-primary btn-login-action btn-login-hidden">Registrati</button>
+
+        <button id="btn-forgot">Password dimenticata?</button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════
+       APP SHELL
+       Nascosta finché l'utente non è autenticato
+  ══════════════════════════════════════════════════════════ -->
+  <div id="app-shell" class="hidden">
+
+    <!-- Titlebar drag region (macOS traffic lights) -->
+    <div id="titlebar">
+      <span id="titlebar-title">Ristorante Pro</span>
+    </div>
+
+    <!-- Topbar ────────────────────────────────────────────── -->
+    <div id="topbar">
+      <span id="topbar-title">Dashboard</span>
+
+      <!-- Stato connessione -->
+      <div id="conn-indicator">
+        <div id="conn-dot"></div>
+        <span id="conn-label">Online</span>
+      </div>
+
+      <!-- Utente loggato -->
+      <div id="topbar-user">
+        <div id="topbar-user-avatar">U</div>
+        <span id="topbar-user-email">utente</span>
+      </div>
+
+      <!-- Bottone sync -->
+      <button id="btn-sync" title="Sincronizza ora">↻</button>
+
+      <!-- Bottone logout -->
+      <button id="btn-logout">
+        <span>⏏</span>
+        Esci
+      </button>
+    </div>
+
+    <!-- Layout sidebar + contenuto ───────────────────────── -->
+    <div id="layout">
+
+      <!-- Sidebar ─────────────────────────────────────────── -->
+      <aside id="sidebar">
+        <div id="logo">
+          <div id="logo-icon">🍽️</div>
+          <div id="logo-text">
+            <strong>Ristorante Pro</strong>
+            <span>Gestionale</span>
+          </div>
+        </div>
+
+        <nav id="nav">
+          <div class="nav-section-label">Principale</div>
+
+          <button class="nav-item active" data-page="dashboard">
+            <span class="nav-icon">📊</span>
+            Dashboard
+          </button>
+
+          <button class="nav-item" data-page="menu">
+            <span class="nav-icon">🍕</span>
+            Menù
+          </button>
+
+          <div class="nav-section-label">Magazzino</div>
+
+          <button class="nav-item" data-page="magazzino">
+            <span class="nav-icon">📦</span>
+            Magazzino
+          </button>
+
+          <button class="nav-item" data-page="ricette">
+            <span class="nav-icon">📖</span>
+            Ricette
+          </button>
+
+          <button class="nav-item" data-page="ordini-fornitori">
+            <span class="nav-icon">🚚</span>
+            Ordini Fornitori
+          </button>
+
+          <div class="nav-section-label">Analisi</div>
+
+          <button class="nav-item" data-page="food-cost">
+            <span class="nav-icon">💰</span>
+            Food Cost
+          </button>
+
+          <div class="nav-section-label">Staff</div>
+
+          <button class="nav-item" data-page="personale">
+            <span class="nav-icon">👥</span>
+            Personale
+          </button>
+        </nav>
+
+        <div id="sidebar-footer">
+          <div id="db-status"></div>
+          <span id="db-label">Database connesso</span>
+        </div>
+      </aside>
+
+      <!-- Contenuto principale ────────────────────────────── -->
+      <main id="main">
+        <div id="page-header">
+          <div id="page-title-block">
+            <h1 id="page-title">Dashboard</h1>
+            <p id="page-subtitle">Benvenuto nel gestionale</p>
+          </div>
+          <div id="page-actions"></div>
+        </div>
+
+        <div id="page-content">
+          <div id="page-loader">
+            <div class="spinner"></div>
+            <span>Caricamento…</span>
+          </div>
+        </div>
+      </main>
+
+    </div><!-- /#layout -->
+  </div><!-- /#app-shell -->
+
+
+  <script src="components/modal.js"></script>
+  <script src="components/toast.js"></script>
+  <script src="components/confirm.js"></script>
+  <script src="components/table.js"></script>
+
+  <script src="pages/dashboard.js"></script>
+  <script src="pages/menu.js"></script>
+  <script src="pages/magazzino.js"></script>
+  <script src="pages/ricette.js"></script>
+  <script src="pages/ordini.js"></script>
+  <script src="pages/foodcost.js"></script>
+  <script src="pages/personale.js"></script>
+  <script src="renderer.js"></script>
+
+  <script>
+    // -- Bootstrap login UI -------------------------------------------------
+    // Gestisce tab Accedi/Registrati, toggle form, messaggi di feedback,
+    // e delega l'azione effettiva all'api esposta da preload.js.
+    // L'app shell viene mostrata da renderer.js dopo il login riuscito.
+    ;(function () {
+      const loginScreen = document.getElementById('login-screen')
+      const appShell = document.getElementById('app-shell')
+      const btnLogout = document.getElementById('btn-logout')
+      const tabBtns = document.querySelectorAll('.login-tab')
+      const inputEmail = document.getElementById('input-email')
+      const inputPwd = document.getElementById('input-password')
+      const groupPwd = document.getElementById('group-password')
+      const btnAccedi = document.getElementById('btn-accedi')
+      const btnReg = document.getElementById('btn-registrati')
+      const btnForgot = document.getElementById('btn-forgot')
+      const errBox = document.getElementById('login-error')
+      const okBox = document.getElementById('login-success')
+      const authPausa = false
+
+      let currentTab = 'accedi'
+
+      function showErr(msg) {
+        errBox.textContent = msg
+        errBox.classList.add('visible')
+        okBox.classList.remove('visible')
+      }
+      function showOk(msg) {
+        okBox.textContent = msg
+        okBox.classList.add('visible')
+        errBox.classList.remove('visible')
+      }
+      function clearFeedback() {
+        errBox.classList.remove('visible')
+        okBox.classList.remove('visible')
+      }
+
+      window.showAppShell = function (email) {
+        const label = email || 'Modalita locale'
+        const initialsSource = label.includes('@') ? label.split('@')[0] : label
+
+        loginScreen.classList.add('hidden')
+        appShell.classList.remove('hidden')
+        document.getElementById('topbar-user-avatar').textContent = initialsSource
+          .slice(0, 2)
+          .toUpperCase()
+        document.getElementById('topbar-user-email').textContent = label
+      }
+
+      if (authPausa) {
+        if (btnLogout) {
+          btnLogout.style.display = 'none'
+        }
+        window.location.hash = ''
+        window.showAppShell('Modalita locale')
+        return
+      }
+
+      function setTab(tab) {
+        currentTab = tab
+        tabBtns.forEach((b) => b.classList.toggle('active', b.dataset.tab === tab))
+        btnAccedi.style.display = tab === 'accedi' ? '' : 'none'
+        btnReg.style.display = tab === 'registrati' ? '' : 'none'
+        groupPwd.style.display = tab === 'forgot' ? 'none' : ''
+        btnAccedi.textContent = tab === 'forgot' ? 'Invia link reset' : 'Accedi'
+        clearFeedback()
+      }
+
+      tabBtns.forEach((b) =>
+        b.addEventListener('click', () => setTab(b.dataset.tab))
+      )
+
+      btnForgot.addEventListener('click', () => {
+        if (currentTab === 'forgot') {
+          setTab('accedi')
+          return
+        }
+        setTab('forgot')
+        btnAccedi.style.display = ''
+        btnAccedi.textContent = 'Invia link reset'
+        btnReg.style.display = 'none'
+      })
+
+      // Accedi / Invia link reset
+      btnAccedi.addEventListener('click', async () => {
+        console.log('[LOGIN] Click accedi')
+        const email = inputEmail.value.trim()
+        const pwd = inputPwd.value
+        console.log('[LOGIN] Email:', email, 'Pwd length:', pwd.length)
+        clearFeedback()
+        if (!email) {
+          showErr("Inserisci l'email.")
+          return
+        }
+
+        if (currentTab === 'forgot') {
+          try {
+            btnAccedi.disabled = true
+            await window.api.auth.recuperaPassword(email)
+            showOk('Link di reset inviato. Controlla la tua email.')
+            setTab('accedi')
+            btnAccedi.textContent = 'Accedi'
+          } catch (e) {
+            showErr(e.message || "Errore nell'invio del link.")
+          } finally {
+            btnAccedi.disabled = false
+          }
+          return
+        }
+
+        if (!pwd) {
+          showErr('Inserisci la password.')
+          return
+        }
+        try {
+          btnAccedi.disabled = true
+          await window.api.auth.login(email, pwd)
+          window.api.sync.avviaAuto().catch(() => {})
+          window.location.hash = ''
+          window.dispatchEvent(new CustomEvent('app:login-success'))
+        } catch (e) {
+          showErr(e.message || 'Credenziali non valide.')
+        } finally {
+          btnAccedi.disabled = false
+        }
+      })
+
+      // Registrati
+      btnReg.addEventListener('click', async () => {
+        console.log('[REGISTRATI] Click registrati')
+        const email = inputEmail.value.trim()
+        const pwd = inputPwd.value
+        clearFeedback()
+        if (!email) {
+          showErr("Inserisci l'email.")
+          return
+        }
+        if (!pwd || pwd.length < 6) {
+          showErr('La password deve essere di almeno 6 caratteri.')
+          return
+        }
+        try {
+          btnReg.disabled = true
+          await window.api.auth.registrati(email, pwd)
+          await window.api.auth.login(email, pwd)
+          window.api.sync.avviaAuto().catch(() => {})
+          window.location.hash = ''
+          window.dispatchEvent(new CustomEvent('app:login-success'))
+        } catch (e) {
+          showErr(e.message || 'Errore durante la registrazione.')
+        } finally {
+          btnReg.disabled = false
+        }
+      })
+
+      // Invio con Enter
+      ;[inputEmail, inputPwd].forEach((el) => {
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            if (currentTab === 'registrati') btnReg.click()
+            else btnAccedi.click()
+          }
+        })
+      })
+
+      // Auto-avanzamento se hash === login (dalla sessione scaduta)
+      if (window.location.hash !== '#login') {
+        // Lascia che renderer.js decida (controllaSessione)
+      }
+    })()
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

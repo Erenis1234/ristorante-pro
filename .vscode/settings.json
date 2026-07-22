@@ -1,0 +1,13 @@
+{
+  "files.associations": {
+    "*.sql": "sql"
+  },
+  "[sql]": {
+    "editor.defaultFormatter": "mtxr.sqltools"
+  },
+  "sqltools.connections": [],
+  "mssql.connections": [],
+  "mssql.linting.enableErrorDiagnostics": false,
+  "mssql.linting.enableWarningDiagnostics": false,
+  "mssql.linting.enableInformationDiagnostics": false
+}

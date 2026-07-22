@@ -1,0 +1,253 @@
+/* ============================================================
+   DIVISORE, SPAZIATURA, UTILITÀ
+   ============================================================ */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 18px 0;
+}
+
+.gap-4  { gap: 4px; }
+.gap-8  { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+
+.mt-4  { margin-top: 4px; }
+.mt-8  { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+
+.flex         { display: flex; }
+.flex-center  { display: flex; align-items: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-col     { display: flex; flex-direction: column; }
+.flex-1       { flex: 1; }
+.flex-shrink-0{ flex-shrink: 0; }
+
+.text-right   { text-align: right; }
+.text-center  { text-align: center; }
+.text-muted   { color: var(--text-muted); }
+.text-dim     { color: var(--text-dim); }
+.text-accent  { color: var(--ambra-l); }
+.text-success { color: var(--success); }
+.text-danger  { color: var(--danger); }
+.text-sm      { font-size: 12px; }
+.text-xs      { font-size: 11px; }
+
+.fw-500 { font-weight: 500; }
+.fw-600 { font-weight: 600; }
+.fw-700 { font-weight: 700; }
+
+.truncate      { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rounded       { border-radius: var(--radius-md); }
+.rounded-full  { border-radius: 9999px; }
+
+/* ============================================================
+   AVATAR / ICONA PERSONA
+   ============================================================ */
+.avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+  background: var(--carbone-4);
+  border: 1px solid var(--border);
+}
+
+/* ============================================================
+   PROGRESS BAR
+   ============================================================ */
+.progress {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--carbone-4);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--ambra-d), var(--ambra));
+  transition: width .4s ease;
+}
+
+.progress-fill.danger  { background: linear-gradient(90deg, #8a3535, var(--danger)); }
+.progress-fill.success { background: linear-gradient(90deg, #3d7a52, var(--success)); }
+
+/* ============================================================
+   KANBAN (usato nella pagina Ordini)
+   ============================================================ */
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  height: 100%;
+}
+
+.kanban-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+
+.kanban-col-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .9px;
+  margin-bottom: 10px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.kanban-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.kanban-count { color: var(--text-dim); }
+
+.kanban-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 2px;
+}
+
+.kanban-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+}
+
+.kanban-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--ambra-border);
+  transform: translateY(-1px);
+}
+
+.turno-print-value {
+  display: none;
+}
+
+@page {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+@media print {
+  body.print-turni {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body.print-turni * {
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  body.print-turni #titlebar,
+  body.print-turni #sidebar,
+  body.print-turni #page-header,
+  body.print-turni #page-content > :not(.turni-week-card),
+  body.print-turni .turni-week-card .turni-header,
+  body.print-turni .turni-week-card .turni-controls,
+  body.print-turni button,
+  body.print-turni .turni-week-card .btn,
+  body.print-turni .turni-week-card .form-input {
+    display: none !important;
+  }
+
+  body.print-turni #layout {
+    display: block !important;
+    padding-top: 0 !important;
+    height: auto !important;
+  }
+
+  body.print-turni #main,
+  body.print-turni #page-content {
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body.print-turni #page-content {
+    padding: 0 !important;
+  }
+
+  body.print-turni .turni-week-card {
+    border: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    border-radius: 0 !important;
+  }
+
+  body.print-turni .turni-week-card .flex-col {
+    gap: 2px !important;
+  }
+
+  body.print-turni .turni-week-card .text-xs {
+    font-size: 9pt !important;
+  }
+
+  body.print-turni #turni-table {
+    table-layout: fixed;
+    width: 100% !important;
+    border-collapse: collapse !important;
+    background: #fff !important;
+  }
+
+  body.print-turni #turni-table th,
+  body.print-turni #turni-table td {
+    border: 1px solid #000 !important;
+    background: #fff !important;
+    color: #000 !important;
+    padding: 6px 8px !important;
+    font-size: 9pt !important;
+    vertical-align: top !important;
+    page-break-inside: avoid;
+  }
+
+  body.print-turni #turni-table th {
+    font-weight: 700 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+  }
+
+  body.print-turni .turni-week-card h3,
+  body.print-turni .turni-week-card .text-muted,
+  body.print-turni .turni-week-card .text-dim,
+  body.print-turni .turni-week-card .fw-600,
+  body.print-turni .turni-week-card td,
+  body.print-turni .turni-week-card th {
+    color: #000 !important;
+  }
+
+  body.print-turni .turni-week-card thead tr,
+  body.print-turni .turni-week-card tbody tr:hover {
+    background: transparent !important;
+  }
+
+  body.print-turni .turni-week-card .turno-print-value {
+    display: block !important;
+    font-weight: 600;
+  }
+}

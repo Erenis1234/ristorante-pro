@@ -1,0 +1,127 @@
+/* ============================================================
+   RISTORANTE PRO — Design System
+   Tema: Cucina professionale — Carbone · Ambra · Avorio
+   ============================================================ */
+
+/* ── Google Fonts ─────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+
+/* ── Variabili ────────────────────────────────────────────── */
+:root {
+  /* Palette principale */
+  --carbone:       #0a0908;
+  --carbone-1:     #120f0d;
+  --carbone-2:     #1c1714;
+  --carbone-3:     #261f1a;
+  --carbone-4:     #332820;
+  --carbone-5:     #42342a;
+
+  --ambra:         #d4a853;
+  --ambra-l:       #e8c27a;
+  --ambra-d:       #ab8238;
+  --ambra-dim:     #d4a85322;
+  --ambra-border:  #d4a85344;
+
+  --avorio:        #f0ead8;
+  --avorio-d:      #c8c0a8;
+  --avorio-dim:    #7a7060;
+
+  /* Semantici */
+  --bg-app:        var(--carbone);
+  --bg-sidebar:    var(--carbone-1);
+  --bg-main:       var(--carbone-2);
+  --bg-card:       var(--carbone-3);
+  --bg-card-hover: var(--carbone-4);
+  --bg-input:      var(--carbone-2);
+  --bg-modal:      var(--carbone-3);
+
+  --border:        #2e2520;
+  --border-focus:  var(--ambra);
+
+  --text-primary:  var(--avorio);
+  --text-muted:    var(--avorio-d);
+  --text-dim:      var(--avorio-dim);
+
+  --accent:        var(--ambra);
+  --accent-h:      var(--ambra-l);
+  --accent-d:      var(--ambra-d);
+
+  --success:       #6db87a;
+  --success-bg:    #6db87a22;
+  --warning:       #d4a853;
+  --warning-bg:    #d4a85322;
+  --danger:        #c46060;
+  --danger-bg:     #c4606022;
+  --info:          #4a89a8;
+  --info-bg:       #4a89a822;
+
+  /* Layout */
+  --sidebar-w:     248px;
+  --titlebar-h:    38px;
+  --radius-sm:     6px;
+  --radius-md:     10px;
+  --radius-lg:     14px;
+  --radius-xl:     20px;
+
+  /* Tipografia */
+  --font-display:  'Playfair Display', Georgia, serif;
+  --font-body:     'DM Sans', system-ui, -apple-system, sans-serif;
+
+  /* Ombre */
+  --shadow-sm:     0 1px 3px rgba(0,0,0,.4);
+  --shadow-md:     0 4px 16px rgba(0,0,0,.5);
+  --shadow-lg:     0 8px 32px rgba(0,0,0,.6);
+  --shadow-card:   0 2px 8px rgba(0,0,0,.35);
+  --shadow-modal:  0 16px 64px rgba(0,0,0,.8);
+
+  /* Transizioni */
+  --t-fast:        .12s ease;
+  --t-med:         .2s ease;
+}
+
+/* ── Reset & base ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar          { width: 5px; height: 5px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: var(--carbone-5); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--avorio-dim); }
+* { scrollbar-width: thin; scrollbar-color: var(--carbone-5) transparent; }
+
+/* ── Animazioni ───────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(18px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);  }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-14px); }
+  to   { opacity: 1; transform: translateY(0);     }
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 4px currentColor; }
+  50%       { box-shadow: 0 0 10px currentColor, 0 0 16px currentColor; }
+}
+
+/* ==

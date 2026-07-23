@@ -23,19 +23,6 @@ contextBridge.exposeInMainWorld('api', {
     controllaSessione: ()                => call('ipc-controlla-sessione'),
   },
 
-  // ── MENU ──────────────────────────────────────────────────────────────────
-  menu: {
-    getCategorie:      ()     => call('get-categorie'),
-    addCategoria:      (dati) => call('add-categoria', dati),
-    updateCategoria:   (dati) => call('update-categoria', dati),
-    deleteCategoria:   (id)   => call('delete-categoria', id),
-    getPiatti:         ()     => call('get-piatti'),
-    addPiatto:         (dati) => call('add-piatto', dati),
-    updatePiatto:      (dati) => call('update-piatto', dati),
-    deletePiatto:      (id)   => call('delete-piatto', id),
-    toggleDisponibile: (id)   => call('toggle-disponibile-piatto', id),
-  },
-
   // ── MAGAZZINO ─────────────────────────────────────────────────────────────
   magazzino: {
     getIngredienti:    ()     => call('get-ingredienti'),

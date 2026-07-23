@@ -26,7 +26,6 @@ try {
 
 // â”€â”€ IPC handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const { registerAuthIpcHandlers }      = require('./ipc/auth.ipc')
-const { registerMenuIpcHandlers }      = require('./ipc/menu.ipc')
 const { registerMenuBuilderIpcHandlers } = require('./ipc/menu-builder.ipc')
 const { registerMagazzinoIpcHandlers } = require('./ipc/magazzino.ipc')
 const { registerRicetteIpcHandlers }   = require('./ipc/ricette.ipc')
@@ -60,7 +59,6 @@ app.whenReady().then(async () => {
 
   // 2. Registra tutti gli IPC handler
   registerAuthIpcHandlers()
-  registerMenuIpcHandlers()
   registerMenuBuilderIpcHandlers()
   registerMagazzinoIpcHandlers()
   registerRicetteIpcHandlers()

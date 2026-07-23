@@ -1,30 +1,5 @@
 function createTables(db) {
 	db.exec(`
-		CREATE TABLE IF NOT EXISTS categorie (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			nome        TEXT    NOT NULL UNIQUE,
-			icona       TEXT,
-			descrizione TEXT,
-			colore      TEXT    DEFAULT '#6366f1',
-			ordine      INTEGER DEFAULT 0,
-			user_id     TEXT,
-			updated_at  TEXT    DEFAULT (datetime('now'))
-		);
-
-		CREATE TABLE IF NOT EXISTS piatti (
-			id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-			nome                TEXT    NOT NULL,
-			descrizione         TEXT,
-			prezzo              REAL    NOT NULL DEFAULT 0,
-			tempo_preparazione  INTEGER DEFAULT 15,
-			categoria_id        INTEGER REFERENCES categorie(id) ON DELETE SET NULL,
-			immagine            TEXT,
-			disponibile         INTEGER NOT NULL DEFAULT 1,
-			allergeni           TEXT,
-			user_id             TEXT,
-			updated_at          TEXT    DEFAULT (datetime('now'))
-		);
-
 		CREATE TABLE IF NOT EXISTS ingredienti (
 			id            INTEGER PRIMARY KEY AUTOINCREMENT,
 			nome          TEXT    NOT NULL UNIQUE,
@@ -37,17 +12,6 @@ function createTables(db) {
 			fornitore     TEXT,
 			user_id       TEXT,
 			updated_at    TEXT    DEFAULT (datetime('now'))
-		);
-
-		CREATE TABLE IF NOT EXISTS piatto_ingredienti (
-			id              INTEGER PRIMARY KEY AUTOINCREMENT,
-			piatto_id       INTEGER NOT NULL REFERENCES piatti(id) ON DELETE CASCADE,
-			ingrediente_id  INTEGER NOT NULL REFERENCES ingredienti(id) ON DELETE CASCADE,
-			quantita        REAL    NOT NULL DEFAULT 0,
-			unita_misura    TEXT    NOT NULL DEFAULT 'g',
-			user_id         TEXT,
-			updated_at      TEXT    DEFAULT (datetime('now')),
-			UNIQUE(piatto_id, ingrediente_id)
 		);
 
 		CREATE TABLE IF NOT EXISTS ricette (

@@ -18,7 +18,7 @@ const supabaseUrl = process.env.SUPABASE_URL
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
 console.log('[Supabase] Variabili ambiente caricate:', {
   nodeEnv: process.env.NODE_ENV || 'development',
-  hasUrl: Boolean(supabaseUrl),
+  url: supabaseUrl || 'n/a',
   hasAnonKey: Boolean(supabaseAnonKey),
   hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
 })
@@ -37,4 +37,5 @@ const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 console.log('[Supabase] Client creato con successo per:', supabaseUrl)
+console.log('[Supabase] Diagnostica avviata. URL:', supabaseUrl)
 module.exports = supabaseClient

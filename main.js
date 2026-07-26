@@ -58,6 +58,15 @@ app.whenReady().then(async () => {
   // 1. Inizializza database (createTables viene chiamato internamente da getDb)
   const db = getDb()
   console.log('[DB] Database pronto:', db.name || 'ristorante.db')
+  if (supabase) {
+    try {
+      const status = await getSupabaseConnectionStatus?.(supabase)
+      console.log('[Supabase] Diagnostica iniziale:', status)
+    } catch (error) {
+      const diagnostic = require('./core/sync').formatSupabaseDiagnostic?.('bootstrap', error)
+      console.error('[Supabase] Diagnostica iniziale fallita:', diagnostic)
+    }
+  }
 
   // 2. Registra tutti gli IPC handler
   registerAuthIpcHandlers()

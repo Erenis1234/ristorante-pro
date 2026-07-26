@@ -1,7 +1,32 @@
 const dns = require('dns').promises
+const path = require('path')
 
 const SYNC_INTERVAL_MS = 30 * 1000
 const DEFAULT_TIMEOUT_MS = 3500
+
+function formatSupabaseDiagnostic(context, error) {
+	const normalizedError = error || {}
+	const message = normalizedError.message || String(normalizedError)
+	const stack = normalizedError.stack || ''
+	const errorCode = normalizedError.code || normalizedError.status || null
+	const fileLine = stack.split('\n').find(line => /\((.*:\d+:\d+)\)|at\s+.*:\d+:\d+/.test(line)) || null
+
+	return {
+		context,
+		errorCode,
+		message,
+		stack,
+		fileLine,
+	}
+}
+
+function logSupabaseDiagnostic(context, diagnostic) {
+	console.error(`[Supabase Diagnostic] ${context}`)
+	console.error(`[Supabase Diagnostic] - errorCode: ${diagnostic.errorCode ?? 'n/a'}`)
+	console.error(`[Supabase Diagnostic] - message: ${diagnostic.message}`)
+	console.error(`[Supabase Diagnostic] - fileLine: ${diagnostic.fileLine || 'n/a'}`)
+	console.error(`[Supabase Diagnostic] - stack: ${diagnostic.stack || 'n/a'}`)
+}
 
 function ensureValidTableName(tabella) {
 	if (!/^[a-z_][a-z0-9_]*$/i.test(tabella)) {
@@ -11,6 +36,8 @@ function ensureValidTableName(tabella) {
 
 async function controllaConnessione(supabaseClient = null, timeoutMs = DEFAULT_TIMEOUT_MS) {
 	if (!supabaseClient) {
+		const diagnostic = formatSupabaseDiagnostic('controllaConnessione', new Error('Client Supabase non disponibile'))
+		logSupabaseDiagnostic('controllaConnessione', diagnostic)
 		console.warn('[Sync] Controllo connessione fallito: client Supabase non disponibile.')
 		return false
 	}
@@ -22,20 +49,23 @@ async function controllaConnessione(supabaseClient = null, timeoutMs = DEFAULT_T
 		])
 
 		if (sessionResult?.error) {
-			console.error('[Sync] Supabase auth.getSession ha restituito un errore:', sessionResult.error.message || sessionResult.error)
+			const diagnostic = formatSupabaseDiagnostic('auth.getSession', sessionResult.error)
+			logSupabaseDiagnostic('auth.getSession', diagnostic)
 			return false
 		}
 
 		console.log('[Sync] Controllo connessione Supabase OK. Sessione:', sessionResult?.data?.session ? 'presente' : 'assente')
 		return true
 	} catch (error) {
-		const message = error?.message || String(error)
-		console.error('[Sync] Controllo connessione Supabase fallito:', message)
+		const diagnostic = formatSupabaseDiagnostic('auth.getSession', error)
+		logSupabaseDiagnostic('auth.getSession', diagnostic)
 
 		try {
 			await dns.lookup('google.com')
 			console.log('[Sync] DNS lookup OK, ma il check Supabase è fallito.')
 		} catch (_dnsError) {
+			const dnsDiagnostic = formatSupabaseDiagnostic('dns.lookup', _dnsError)
+			logSupabaseDiagnostic('dns.lookup', dnsDiagnostic)
 			console.warn('[Sync] DNS lookup fallito:', _dnsError?.message || _dnsError)
 		}
 
@@ -216,6 +246,7 @@ function avviaSyncAutomatica(db, supabase, userId) {
 module.exports = {
 	controllaConnessione,
 	getSupabaseConnectionStatus,
+	formatSupabaseDiagnostic,
 	syncCoda,
 	avviaSyncAutomatica,
 }

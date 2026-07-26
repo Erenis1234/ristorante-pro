@@ -33,6 +33,7 @@
 
         <!-- Messaggi feedback -->
         <div id="login-error"></div>
+        <div id="login-warning"></div>
         <div id="login-success"></div>
 
         <!-- Form -->
@@ -260,6 +261,7 @@
       const btnReg = document.getElementById('btn-registrati')
       const btnForgot = document.getElementById('btn-forgot')
       const errBox = document.getElementById('login-error')
+      const warnBox = document.getElementById('login-warning')
       const okBox = document.getElementById('login-success')
       const passwordHelp = document.getElementById('password-help')
       const passwordStrength = document.getElementById('password-strength')
@@ -273,15 +275,24 @@
       function showErr(msg) {
         errBox.textContent = msg
         errBox.classList.add('visible')
+        warnBox.classList.remove('visible')
+        okBox.classList.remove('visible')
+      }
+      function showWarn(msg) {
+        warnBox.textContent = msg
+        warnBox.classList.add('visible')
+        errBox.classList.remove('visible')
         okBox.classList.remove('visible')
       }
       function showOk(msg) {
         okBox.textContent = msg
         okBox.classList.add('visible')
         errBox.classList.remove('visible')
+        warnBox.classList.remove('visible')
       }
       function clearFeedback() {
         errBox.classList.remove('visible')
+        warnBox.classList.remove('visible')
         okBox.classList.remove('visible')
       }
 
@@ -486,9 +497,14 @@
         }
         try {
           btnReg.disabled = true
-          await window.api.auth.registrati(email, pwd)
+          const registrazione = await window.api.auth.registrati(email, pwd)
           await window.api.auth.login(email, pwd)
           window.api.sync.avviaAuto().catch(() => {})
+          if (registrazione?.supabaseError) {
+            const avvisoMsg = `Registrazione salvata solo in locale: Supabase non ha completato la sincronizzazione (motivo: ${registrazione.supabaseErrorMessage || 'errore sconosciuto'}).`
+            showWarn(avvisoMsg)
+            window.alert(avvisoMsg)
+          }
           window.location.hash = ''
           window.dispatchEvent(new CustomEvent('app:login-success'))
         } catch (e) {

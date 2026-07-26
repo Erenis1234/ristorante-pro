@@ -421,6 +421,8 @@ async function registrati(email, password) {
 		}
 	}
 
+	let supabaseErrorMessage = null
+
 	if (supabase) {
 		try {
 			const { data, error } = await supabase.auth.signUp({ email: normalizedIdentifier.value, password })
@@ -435,6 +437,7 @@ async function registrati(email, password) {
 				} else {
 					console.warn('[Auth] Supabase signUp fallito, fallback locale attivato:', authErrorMessage)
 				}
+				supabaseErrorMessage = authErrorMessage
 			} else {
 				try { registerLocalUser(normalizedIdentifier.value, password) } catch (_) { /* già esistente */ }
 				if (data?.session) {
@@ -451,6 +454,7 @@ async function registrati(email, password) {
 			} else {
 				console.warn('[Auth] Supabase registrazione fallita, uso fallback locale:', message)
 			}
+			supabaseErrorMessage = message
 		}
 	}
 
@@ -462,6 +466,7 @@ async function registrati(email, password) {
 		},
 		session: null,
 		provider: 'local',
+		...(supabaseErrorMessage ? { supabaseError: true, supabaseErrorMessage } : {}),
 	}
 }
 

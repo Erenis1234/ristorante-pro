@@ -23,7 +23,8 @@ try {
   ;({ avviaSyncAutomatica, controllaConnessione, getSupabaseConnectionStatus, syncCoda } = require('./core/sync'))
   console.log('[Main] Modulo sync Supabase caricato. Client presente:', Boolean(supabase))
 } catch (err) {
-  console.warn('[Main] Sync Supabase non disponibile:', err.message)
+  console.error('[Main] Sync Supabase non disponibile:', err?.message || err)
+  console.error('[Main] Stack completo errore require Supabase/sync:', err?.stack || '(nessuno stack disponibile)')
 }
 
 // â”€â”€ IPC handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

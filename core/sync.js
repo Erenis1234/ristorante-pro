@@ -1,6 +1,7 @@
 const dns = require('dns').promises
 
 const SYNC_INTERVAL_MS = 30 * 1000
+const DEFAULT_TIMEOUT_MS = 3500
 
 function ensureValidTableName(tabella) {
 	if (!/^[a-z_][a-z0-9_]*$/i.test(tabella)) {
@@ -8,12 +9,56 @@ function ensureValidTableName(tabella) {
 	}
 }
 
-async function controllaConnessione() {
-	try {
-		await dns.lookup('google.com')
-		return true
-	} catch (_error) {
+async function controllaConnessione(supabaseClient = null, timeoutMs = DEFAULT_TIMEOUT_MS) {
+	if (!supabaseClient) {
+		console.warn('[Sync] Controllo connessione fallito: client Supabase non disponibile.')
 		return false
+	}
+
+	try {
+		const sessionResult = await Promise.race([
+			supabaseClient.auth.getSession(),
+			new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+		])
+
+		if (sessionResult?.error) {
+			console.error('[Sync] Supabase auth.getSession ha restituito un errore:', sessionResult.error.message || sessionResult.error)
+			return false
+		}
+
+		console.log('[Sync] Controllo connessione Supabase OK. Sessione:', sessionResult?.data?.session ? 'presente' : 'assente')
+		return true
+	} catch (error) {
+		const message = error?.message || String(error)
+		console.error('[Sync] Controllo connessione Supabase fallito:', message)
+
+		try {
+			await dns.lookup('google.com')
+			console.log('[Sync] DNS lookup OK, ma il check Supabase è fallito.')
+		} catch (_dnsError) {
+			console.warn('[Sync] DNS lookup fallito:', _dnsError?.message || _dnsError)
+		}
+
+		return false
+	}
+}
+
+async function getSupabaseConnectionStatus(supabaseClient = null, timeoutMs = DEFAULT_TIMEOUT_MS) {
+	if (!supabaseClient) {
+		return {
+			configured: false,
+			online: false,
+			label: 'Supabase offline',
+			reason: 'Client Supabase non disponibile',
+		}
+	}
+
+	const online = await controllaConnessione(supabaseClient, timeoutMs)
+	return {
+		configured: true,
+		online,
+		label: online ? 'Supabase online' : 'Supabase offline',
+		reason: online ? 'auth.getSession completato con successo' : 'auth.getSession non riuscito',
 	}
 }
 
@@ -95,8 +140,8 @@ async function syncCoda(db, supabase, userId) {
 		if (!payload) {
 			db.prepare(
 				`UPDATE coda_sync
-				 SET tentativi = tentativi + 1, stato = 'error', ultimo_errore = ?, updated_at = datetime('now')
-				 WHERE id = ?`
+					 SET tentativi = tentativi + 1, stato = 'error', ultimo_errore = ?, updated_at = datetime('now')
+					 WHERE id = ?`
 			).run('Payload coda_sync non valido', item.id)
 			result.failed += 1
 			continue
@@ -129,22 +174,22 @@ async function syncCoda(db, supabase, userId) {
 
 			db.prepare(
 				`UPDATE coda_sync
-				 SET sincronizzato = 1,
-				     stato = 'synced',
-				     ultimo_errore = NULL,
-				     sincronizzato_il = datetime('now'),
-				     updated_at = datetime('now')
-				 WHERE id = ?`
+					 SET sincronizzato = 1,
+					     stato = 'synced',
+					     ultimo_errore = NULL,
+					     sincronizzato_il = datetime('now'),
+					     updated_at = datetime('now')
+					 WHERE id = ?`
 			).run(item.id)
 			result.synced += 1
 		} catch (error) {
 			db.prepare(
 				`UPDATE coda_sync
-				 SET tentativi = tentativi + 1,
-				     stato = 'error',
-				     ultimo_errore = ?,
-				     updated_at = datetime('now')
-				 WHERE id = ?`
+					 SET tentativi = tentativi + 1,
+					     stato = 'error',
+					     ultimo_errore = ?,
+					     updated_at = datetime('now')
+					 WHERE id = ?`
 			).run(error.message, item.id)
 			result.failed += 1
 		}
@@ -155,21 +200,22 @@ async function syncCoda(db, supabase, userId) {
 
 function avviaSyncAutomatica(db, supabase, userId) {
 	return setInterval(async () => {
-		const online = await controllaConnessione()
+		const online = await controllaConnessione(supabase)
 		if (!online) {
 			return
 		}
 
 		try {
 			await syncCoda(db, supabase, userId)
-		} catch (_error) {
-			// Errore intenzionalmente ignorato: il prossimo ciclo ritentera la sync.
+		} catch (error) {
+			console.error('[Sync] Sync automatica fallita:', error?.message || error)
 		}
 	}, SYNC_INTERVAL_MS)
 }
 
 module.exports = {
 	controllaConnessione,
+	getSupabaseConnectionStatus,
 	syncCoda,
 	avviaSyncAutomatica,
 }

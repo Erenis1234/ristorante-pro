@@ -2,6 +2,8 @@
 
 const { contextBridge, ipcRenderer } = require('electron')
 
+console.log('[Preload] Esposizione API via contextBridge attivata.')
+
 // Invoca un canale IPC passando gli argomenti direttamente.
 // Gli errori lanciati nel main process vengono propagati come rejection.
 function call(channel, ...args) {

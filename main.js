@@ -15,11 +15,13 @@ const { controllaSessione, getUtenteCorrente } = require('./core/auth')
 let supabase = null
 let avviaSyncAutomatica = null
 let controllaConnessione = null
+let getSupabaseConnectionStatus = null
 let syncCoda = null
 let syncIntervalId = null
 try {
   supabase = require('./core/supabase')
-  ;({ avviaSyncAutomatica, controllaConnessione, syncCoda } = require('./core/sync'))
+  ;({ avviaSyncAutomatica, controllaConnessione, getSupabaseConnectionStatus, syncCoda } = require('./core/sync'))
+  console.log('[Main] Modulo sync Supabase caricato. Client presente:', Boolean(supabase))
 } catch (err) {
   console.warn('[Main] Sync Supabase non disponibile:', err.message)
 }
@@ -69,32 +71,33 @@ app.whenReady().then(async () => {
   // ── Sync IPC handlers ──────────────────────────────────────────────────────
   ipcMain.removeHandler('sync-ping')
   ipcMain.handle('sync-ping', async () => {
-    if (controllaConnessione) return controllaConnessione()
-    return false
+    if (!controllaConnessione) return false
+    const online = await controllaConnessione(supabase)
+    console.log('[Main] Ping Supabase:', online)
+    return online
   })
 
   ipcMain.removeHandler('get-stato-connessione')
   ipcMain.handle('get-stato-connessione', async () => {
-    if (controllaConnessione) return controllaConnessione()
-    return false
+    if (!getSupabaseConnectionStatus) return false
+    const status = await getSupabaseConnectionStatus(supabase)
+    console.log('[Main] Stato connessione:', status)
+    return status.online
   })
 
   ipcMain.removeHandler('get-stato-supabase')
   ipcMain.handle('get-stato-supabase', async () => {
-    if (!supabase) {
-      return { configured: false, online: false, label: 'Supabase non configurato' }
+    if (!getSupabaseConnectionStatus) {
+      return { configured: false, online: false, label: 'Supabase non configurato', reason: 'Modulo sync non disponibile' }
     }
 
     try {
-      const online = controllaConnessione ? await controllaConnessione() : false
-      return {
-        configured: true,
-        online,
-        label: online ? 'Supabase online' : 'Supabase offline',
-      }
+      const status = await getSupabaseConnectionStatus(supabase)
+      console.log('[Main] Stato Supabase:', status)
+      return status
     } catch (err) {
-      console.error('[Sync] Errore stato Supabase:', err.message)
-      return { configured: true, online: false, label: 'Supabase offline' }
+      console.error('[Main] Errore stato Supabase:', err?.message || err)
+      return { configured: Boolean(supabase), online: false, label: 'Supabase offline', reason: err?.message || String(err) }
     }
   })
 

@@ -219,6 +219,7 @@
       configured = result?.configured ?? true
       online = result?.online ?? false
       label = result?.label || (online ? 'Supabase online' : 'Supabase offline')
+      console.info('[Renderer] Stato Supabase aggiornato:', result)
 
       connDot.classList.remove('offline')
       if (connIndicator) {
@@ -227,6 +228,7 @@
     } catch (err) {
       configured = false
       label = 'Supabase offline'
+      console.error('[Renderer] Errore aggiornamento stato Supabase:', err)
       connDot.classList.add('offline')
       if (connIndicator) {
         connIndicator.title = 'Supabase offline'

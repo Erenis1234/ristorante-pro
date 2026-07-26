@@ -48,7 +48,7 @@
     ],
     "extraResources": [
       {
-        "from": ".env",
+        "from": ".env.production",
         "to": ".env"
       }
     ],

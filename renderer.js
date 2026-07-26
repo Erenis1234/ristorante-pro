@@ -79,7 +79,7 @@
     }
 
     document.addEventListener('click', (e) => {
-      if (!profileMenu || profileMenu.classList.contains('hidden')) return
+      if (!profileMenu) return
       const cliccatoSulTrigger = btnProfile?.contains(e.target)
       const cliccatoSulMenu = profileMenu.contains(e.target)
       if (!cliccatoSulTrigger && !cliccatoSulMenu) {
@@ -196,6 +196,7 @@
     if (profileMenu) {
       profileMenu.classList.add('hidden')
       profileMenu.setAttribute('aria-hidden', 'true')
+      profileMenu.style.display = 'none'
     }
     if (btnProfile) {
       btnProfile.setAttribute('aria-expanded', 'false')
@@ -208,6 +209,7 @@
     if (!profileMenu) return
     profileMenu.classList.toggle('hidden', !aperto)
     profileMenu.setAttribute('aria-hidden', String(!aperto))
+    profileMenu.style.display = aperto ? 'flex' : 'none'
     if (btnProfile) {
       btnProfile.setAttribute('aria-expanded', String(aperto))
     }

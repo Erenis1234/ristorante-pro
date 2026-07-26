@@ -189,6 +189,30 @@
     }
   }
 
+  // ── Profilo menu ─────────────────────────────────────────────────
+  function chiudiMenuProfilo() {
+    const profileMenu = document.getElementById('profile-menu')
+    const btnProfile = document.getElementById('btn-profile')
+    if (profileMenu) {
+      profileMenu.classList.add('hidden')
+      profileMenu.setAttribute('aria-hidden', 'true')
+    }
+    if (btnProfile) {
+      btnProfile.setAttribute('aria-expanded', 'false')
+    }
+  }
+
+  function impostaMenuProfilo(aperto) {
+    const profileMenu = document.getElementById('profile-menu')
+    const btnProfile = document.getElementById('btn-profile')
+    if (!profileMenu) return
+    profileMenu.classList.toggle('hidden', !aperto)
+    profileMenu.setAttribute('aria-hidden', String(!aperto))
+    if (btnProfile) {
+      btnProfile.setAttribute('aria-expanded', String(aperto))
+    }
+  }
+
   // ── Aggiorna active nav ──────────────────────────────────────────
   function aggiornaActiveNav(pageKey) {
     const navLinks = document.querySelectorAll('#sidebar [data-page]')

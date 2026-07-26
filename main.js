@@ -79,6 +79,25 @@ app.whenReady().then(async () => {
     return false
   })
 
+  ipcMain.removeHandler('get-stato-supabase')
+  ipcMain.handle('get-stato-supabase', async () => {
+    if (!supabase) {
+      return { configured: false, online: false, label: 'Supabase non configurato' }
+    }
+
+    try {
+      const online = controllaConnessione ? await controllaConnessione() : false
+      return {
+        configured: true,
+        online,
+        label: online ? 'Supabase online' : 'Supabase offline',
+      }
+    } catch (err) {
+      console.error('[Sync] Errore stato Supabase:', err.message)
+      return { configured: true, online: false, label: 'Supabase offline' }
+    }
+  })
+
   ipcMain.removeHandler('sync-manuale')
   ipcMain.handle('sync-manuale', async () => {
     if (!syncCoda || !supabase) return { processed: 0, synced: 0, failed: 0 }

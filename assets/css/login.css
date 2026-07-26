@@ -5,16 +5,26 @@
   position: fixed;
   inset: 0;
   z-index: 500;
-  background: var(--bg-app);
+  background: radial-gradient(circle at top, rgba(212,168,83,.10), transparent 45%), var(--bg-app);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
   -webkit-app-region: drag;
+}
+
+#login-screen #login-box {
+  width: min(100%, 440px);
+  margin: 0 auto;
 }
 #login-screen.hidden { display: none; }
 
 #login-box {
-  width: 380px;
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   -webkit-app-region: no-drag;
 }
 
@@ -30,7 +40,10 @@
 
 #login-logo {
   text-align: center;
-  margin-bottom: 36px;
+  margin-bottom: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 #login-logo-icon {
@@ -63,10 +76,11 @@
 }
 
 #login-card {
+  width: 100%;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  padding: 32px;
+  padding: 28px 26px;
   box-shadow: var(--shadow-modal);
 }
 #login-card .form-group { margin-bottom: 14px; }
@@ -77,7 +91,7 @@
   background: var(--carbone-2);
   border-radius: var(--radius-md);
   padding: 3px;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
 
 .login-tab {
@@ -148,5 +162,47 @@ user-select: none;
   transition: color var(--t-fast);
 }
 #btn-forgot:hover { color: var(--ambra); }
+
+.password-help,
+.auth-help {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.password-strength {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.password-strength-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  overflow: hidden;
+}
+
+.password-strength-bar::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 0;
+  transition: width .2s ease, background .2s ease;
+  background: var(--danger);
+}
+
+.password-strength.weak .password-strength-bar::after { background: var(--danger); }
+.password-strength.medium .password-strength-bar::after { background: var(--ambra); }
+.password-strength.strong .password-strength-bar::after { background: var(--success); }
+
+.password-strength.hidden,
+.auth-help.hidden,
+.password-help.hidden {
+  display: none;
+}
 
 /* ==

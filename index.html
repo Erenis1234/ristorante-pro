@@ -37,15 +37,24 @@
 
         <!-- Form -->
         <div class="form-group">
-          <label class="form-label" for="input-email">Email</label>
-          <input id="input-email" type="email" class="form-input"
-                 placeholder="chef@ristorante.it" autocomplete="email" />
+          <label class="form-label" for="input-email">Email o numero di telefono</label>
+          <input id="input-email" type="text" class="form-input"
+                 placeholder="chef@ristorante.it oppure +39 333 1234567" autocomplete="username" />
         </div>
 
         <div class="form-group" id="group-password">
           <label class="form-label" for="input-password">Password</label>
           <input id="input-password" type="password" class="form-input"
                  placeholder="••••••••" autocomplete="current-password" />
+          <div id="password-help" class="password-help">Almeno 6 caratteri per registrarti.</div>
+          <div id="password-strength" class="password-strength hidden" aria-live="polite">
+            <div id="password-strength-bar" class="password-strength-bar"></div>
+            <span id="password-strength-label">Sicurezza: debole</span>
+          </div>
+        </div>
+
+        <div id="forgot-help" class="auth-help hidden">
+          Il recupero password richiede connessione online.
         </div>
 
         <button id="btn-accedi"     class="btn btn-primary btn-login-action">Accedi</button>
@@ -79,10 +88,48 @@
         <span id="conn-label">Online</span>
       </div>
 
-      <!-- Utente loggato -->
-      <div id="topbar-user">
-        <div id="topbar-user-avatar">U</div>
-        <span id="topbar-user-email">utente</span>
+      <!-- Profilo utente -->
+      <div id="profile-menu-wrapper">
+        <button id="btn-profile" title="Profilo e impostazioni" type="button">
+          <div id="topbar-user" class="profile-trigger-main">
+            <div id="topbar-user-avatar">U</div>
+            <div class="profile-trigger-text">
+              <span id="topbar-user-name">Profilo</span>
+              <span id="topbar-user-email">utente</span>
+            </div>
+          </div>
+          <span class="btn-profile-gear">⚙️</span>
+        </button>
+
+        <div id="profile-menu" class="hidden" role="menu" aria-label="Profilo utente">
+          <div class="profile-menu-header">
+            <div id="profile-menu-avatar">U</div>
+            <div>
+              <div id="profile-menu-name">Profilo</div>
+              <div id="profile-menu-email">utente</div>
+            </div>
+          </div>
+
+          <div class="profile-menu-info">
+            <div class="profile-info-row">
+              <span>Ruolo</span>
+              <strong>Amministratore</strong>
+            </div>
+            <div class="profile-info-row">
+              <span>Modalità</span>
+              <strong id="profile-mode">Locale</strong>
+            </div>
+            <div class="profile-info-row">
+              <span>Sync</span>
+              <strong id="profile-sync">In attesa</strong>
+            </div>
+          </div>
+
+          <div class="profile-menu-actions">
+            <button id="profile-settings-btn" type="button">Impostazioni</button>
+            <button id="profile-logout-btn" type="button">Esci</button>
+          </div>
+        </div>
       </div>
 
       <!-- Bottone sync -->
@@ -155,7 +202,7 @@
 
         <div id="sidebar-footer">
           <div id="db-status"></div>
-          <span id="db-label">Database connesso</span>
+          <span id="db-label">Supabase online</span>
         </div>
       </aside>
 
@@ -193,6 +240,7 @@
   <script src="pages/ordini.js"></script>
   <script src="pages/foodcost.js"></script>
   <script src="pages/personale.js"></script>
+  <script src="pages/profilo.js"></script>
   <script src="renderer.js"></script>
 
   <script>
@@ -213,6 +261,11 @@
       const btnForgot = document.getElementById('btn-forgot')
       const errBox = document.getElementById('login-error')
       const okBox = document.getElementById('login-success')
+      const passwordHelp = document.getElementById('password-help')
+      const passwordStrength = document.getElementById('password-strength')
+      const passwordStrengthBar = document.getElementById('password-strength-bar')
+      const passwordStrengthLabel = document.getElementById('password-strength-label')
+      const forgotHelp = document.getElementById('forgot-help')
       const authPausa = false
 
       let currentTab = 'accedi'
@@ -232,16 +285,89 @@
         okBox.classList.remove('visible')
       }
 
+      function getPasswordStrength(value) {
+        let score = 0
+        if (value.length >= 6) score += 1
+        if (value.length >= 8) score += 1
+        if (/[A-Z]/.test(value)) score += 1
+        if (/[0-9]/.test(value)) score += 1
+        if (/[^A-Za-z0-9]/.test(value)) score += 1
+        return Math.min(score, 5)
+      }
+
+      function updatePasswordHint() {
+        const pwd = inputPwd.value
+
+        if (currentTab === 'forgot') {
+          passwordHelp.classList.add('hidden')
+          passwordStrength.classList.add('hidden')
+          forgotHelp.classList.remove('hidden')
+          return
+        }
+
+        forgotHelp.classList.add('hidden')
+
+        if (currentTab === 'registrati') {
+          passwordHelp.classList.remove('hidden')
+          passwordStrength.classList.remove('hidden')
+
+          const score = getPasswordStrength(pwd)
+          const width = Math.min(100, 20 + score * 16)
+          passwordStrengthBar.style.width = `${width}%`
+
+          if (!pwd) {
+            passwordStrengthBar.style.width = '0%'
+            passwordStrengthLabel.textContent = 'Sicurezza: debole'
+            passwordStrength.className = 'password-strength hidden'
+            return
+          }
+
+          if (score <= 2) {
+            passwordStrength.className = 'password-strength weak'
+            passwordStrengthLabel.textContent = 'Sicurezza: debole'
+          } else if (score <= 4) {
+            passwordStrength.className = 'password-strength medium'
+            passwordStrengthLabel.textContent = 'Sicurezza: buona'
+          } else {
+            passwordStrength.className = 'password-strength strong'
+            passwordStrengthLabel.textContent = 'Sicurezza: forte'
+          }
+        } else {
+          passwordHelp.classList.add('hidden')
+          passwordStrength.classList.add('hidden')
+        }
+      }
+
       window.showAppShell = function (email) {
         const label = email || 'Modalita locale'
-        const initialsSource = label.includes('@') ? label.split('@')[0] : label
+        const displayName = label.includes('@') ? label.split('@')[0] : (label === 'Modalita locale' ? 'Profilo locale' : label)
+        const initialsSource = displayName
+        const detailLabel = label.includes('@') ? label : 'Modalità locale'
 
         loginScreen.classList.add('hidden')
         appShell.classList.remove('hidden')
-        document.getElementById('topbar-user-avatar').textContent = initialsSource
-          .slice(0, 2)
-          .toUpperCase()
-        document.getElementById('topbar-user-email').textContent = label
+
+        const profileMenuEl = document.getElementById('profile-menu')
+        if (profileMenuEl) {
+          profileMenuEl.classList.add('hidden')
+        }
+
+        const avatarEl = document.getElementById('topbar-user-avatar')
+        const profileMenuAvatarEl = document.getElementById('profile-menu-avatar')
+        const nameEl = document.getElementById('topbar-user-name')
+        const emailEl = document.getElementById('topbar-user-email')
+        const profileNameEl = document.getElementById('profile-menu-name')
+        const profileEmailEl = document.getElementById('profile-menu-email')
+        const profileModeEl = document.getElementById('profile-mode')
+
+        const initials = initialsSource.slice(0, 2).toUpperCase()
+        if (avatarEl) avatarEl.textContent = initials
+        if (profileMenuAvatarEl) profileMenuAvatarEl.textContent = initials
+        if (nameEl) nameEl.textContent = displayName
+        if (emailEl) emailEl.textContent = detailLabel
+        if (profileNameEl) profileNameEl.textContent = displayName
+        if (profileEmailEl) profileEmailEl.textContent = detailLabel
+        if (profileModeEl) profileModeEl.textContent = label.includes('@') ? 'Cloud / Supabase' : 'Locale'
       }
 
       if (authPausa) {
@@ -253,6 +379,14 @@
         return
       }
 
+      function isValidLoginIdentifier(value) {
+        const trimmed = String(value || '').trim()
+        if (!trimmed) return false
+        const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
+        const isPhone = /^\+?\d[\d\s().-]{4,}$/.test(trimmed)
+        return isEmail || isPhone
+      }
+
       function setTab(tab) {
         currentTab = tab
         tabBtns.forEach((b) => b.classList.toggle('active', b.dataset.tab === tab))
@@ -261,6 +395,7 @@
         groupPwd.style.display = tab === 'forgot' ? 'none' : ''
         btnAccedi.textContent = tab === 'forgot' ? 'Invia link reset' : 'Accedi'
         clearFeedback()
+        updatePasswordHint()
       }
 
       tabBtns.forEach((b) =>
@@ -286,19 +421,28 @@
         console.log('[LOGIN] Email:', email, 'Pwd length:', pwd.length)
         clearFeedback()
         if (!email) {
-          showErr("Inserisci l'email.")
+          showErr('Inserisci email o numero di telefono.')
+          return
+        }
+
+        if (!isValidLoginIdentifier(email)) {
+          showErr('Inserisci un indirizzo email o un numero di telefono valido.')
           return
         }
 
         if (currentTab === 'forgot') {
           try {
             btnAccedi.disabled = true
-            await window.api.auth.recuperaPassword(email)
+            const recoveryResult = await window.api.auth.recuperaPassword(email)
+            if (!recoveryResult?.success) {
+              throw new Error(recoveryResult?.message || "Errore nell'invio del link.")
+            }
             showOk('Link di reset inviato. Controlla la tua email.')
             setTab('accedi')
             btnAccedi.textContent = 'Accedi'
           } catch (e) {
-            showErr(e.message || "Errore nell'invio del link.")
+            const msg = e.message || "Errore nell'invio del link."
+            showErr(msg.replace('Il recupero password e disponibile solo per gli account online.', 'Il reset password e disponibile solo per gli account online.'))
           } finally {
             btnAccedi.disabled = false
           }
@@ -329,7 +473,11 @@
         const pwd = inputPwd.value
         clearFeedback()
         if (!email) {
-          showErr("Inserisci l'email.")
+          showErr('Inserisci email o numero di telefono.')
+          return
+        }
+        if (!isValidLoginIdentifier(email)) {
+          showErr('Inserisci un indirizzo email o un numero di telefono valido.')
           return
         }
         if (!pwd || pwd.length < 6) {
@@ -349,6 +497,8 @@
           btnReg.disabled = false
         }
       })
+
+      inputPwd.addEventListener('input', updatePasswordHint)
 
       // Invio con Enter
       ;[inputEmail, inputPwd].forEach((el) => {

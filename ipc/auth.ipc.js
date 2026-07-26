@@ -14,6 +14,7 @@ function registerAuthIpcHandlers() {
 	registerHandler('ipc-recupera-password', async (_event, email) => auth.recuperaPassword(email))
 	registerHandler('ipc-utente-corrente', async () => auth.getUtenteCorrente())
 	registerHandler('ipc-controlla-sessione', async () => auth.controllaSessione())
+	registerHandler('ipc-update-profile', async (_event, profileData) => auth.updateProfile(profileData))
 }
 
 module.exports = {

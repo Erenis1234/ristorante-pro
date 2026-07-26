@@ -10,6 +10,7 @@
     'ordini-fornitori':    { titolo: 'Ordini Fornitori', nome: 'ordini' },
     'food-cost':           { titolo: 'Food Cost', nome: 'foodcost' },
     'personale':           { titolo: 'Personale', nome: 'personale' },
+    'profilo':             { titolo: 'Profilo', nome: 'profilo' },
   }
 
   let paginaAttuale = null
@@ -62,6 +63,59 @@
       })
     }
 
+    // Profilo / menu
+    const btnProfile = document.getElementById('btn-profile')
+    const profileMenu = document.getElementById('profile-menu')
+
+    chiudiMenuProfilo()
+
+    if (btnProfile && profileMenu) {
+      profileMenu.setAttribute('aria-hidden', 'true')
+      btnProfile.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const aperto = !profileMenu.classList.contains('hidden')
+        impostaMenuProfilo(!aperto)
+      })
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!profileMenu || profileMenu.classList.contains('hidden')) return
+      const cliccatoSulTrigger = btnProfile?.contains(e.target)
+      const cliccatoSulMenu = profileMenu.contains(e.target)
+      if (!cliccatoSulTrigger && !cliccatoSulMenu) {
+        chiudiMenuProfilo()
+      }
+    })
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        chiudiMenuProfilo()
+      }
+    })
+
+    const profileLogoutBtn = document.getElementById('profile-logout-btn')
+    if (profileLogoutBtn) {
+      profileLogoutBtn.addEventListener('click', async () => {
+        try {
+          await window.api.auth.logout()
+          window.location.hash = '#login'
+          location.reload()
+        } catch (e) {
+          console.error('[Logout] Errore:', e)
+        }
+      })
+    }
+
+    const profileSettingsBtn = document.getElementById('profile-settings-btn')
+    if (profileSettingsBtn) {
+      profileSettingsBtn.addEventListener('click', () => {
+        profileMenu?.classList.add('hidden')
+        const pageTitle = document.getElementById('topbar-title')
+        if (pageTitle) pageTitle.textContent = 'Profilo'
+        caricaPagina('profilo')
+      })
+    }
+
     // Logout
     const btnLogout = document.getElementById('btn-logout')
     if (btnLogout) {
@@ -87,6 +141,8 @@
       return
     }
 
+    chiudiMenuProfilo()
+
     // Aggiorna active state sulla sidebar
     aggiornaActiveNav(pageKey)
 
@@ -102,6 +158,12 @@
     }
 
     try {
+      container.innerHTML = `
+        <div id="page-loader" class="page-loading-state">
+          <div class="spinner"></div>
+          <span>Caricamento…</span>
+        </div>`
+
       const pageModule = window.pages?.[config.nome]
       const loadPage = pageModule?.load || pageModule?.init
       if (typeof loadPage !== 'function') {
@@ -139,26 +201,48 @@
   async function aggiornaPinged() {
     const connIndicator = document.getElementById('conn-indicator')
     const connDot = document.getElementById('conn-dot')
+    const dbStatus = document.getElementById('db-status')
+    const dbLabel = document.getElementById('db-label')
+    const profileSync = document.getElementById('profile-sync')
     if (!connDot) return
 
+    let online = false
+    let configured = true
+    let label = 'Supabase offline'
+
     try {
-      // Prova a contattare il backend
       const result = await Promise.race([
-        window.api.sync.ping?.(),
+        window.api.sync.getStatoSupabase?.(),
         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 2000))
       ])
 
-      // Connesso
+      configured = result?.configured ?? true
+      online = result?.online ?? false
+      label = result?.label || (online ? 'Supabase online' : 'Supabase offline')
+
       connDot.classList.remove('offline')
       if (connIndicator) {
-        connIndicator.title = 'Connesso'
+        connIndicator.title = online ? 'Supabase online' : 'Supabase offline'
       }
     } catch (err) {
-      // Offline
+      configured = false
+      label = 'Supabase offline'
       connDot.classList.add('offline')
       if (connIndicator) {
-        connIndicator.title = 'Offline - cambio locale'
+        connIndicator.title = 'Supabase offline'
       }
+    }
+
+    if (dbStatus) {
+      dbStatus.classList.toggle('offline', !online || !configured)
+    }
+
+    if (dbLabel) {
+      dbLabel.textContent = label
+    }
+
+    if (profileSync) {
+      profileSync.textContent = online ? 'Supabase online' : 'Supabase offline'
     }
   }
 

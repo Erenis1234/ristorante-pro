@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('api', {
     recuperaPassword:  (email)           => call('ipc-recupera-password', email),
     getUtenteCorrente: ()                => call('ipc-utente-corrente'),
     controllaSessione: ()                => call('ipc-controlla-sessione'),
+    updateProfile:     (profileData)     => call('ipc-update-profile', profileData),
   },
 
   // ── MAGAZZINO ─────────────────────────────────────────────────────────────
@@ -86,6 +87,7 @@ contextBridge.exposeInMainWorld('api', {
   sync: {
     ping:                () => call('sync-ping'),
     getStatoConnessione: () => call('get-stato-connessione'),
+    getStatoSupabase:    () => call('get-stato-supabase'),
     syncManuale:         () => call('sync-manuale'),
     avviaAuto:           () => call('avvia-sync-automatica'),
   },

@@ -9,7 +9,7 @@ const AUTH_PAUSED = false
 const { getDb }                  = require('./core/db-manager')
 
 // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const { controllaSessione, getUtenteCorrente } = require('./core/auth')
+const { controllaSessione, getUtenteCorrente, sincronizzaRegistrazioniPendenti } = require('./core/auth')
 
 // ── Sync (facoltativo: richiede .env con SUPABASE_URL e SUPABASE_KEY) ─────────
 let supabase = null
@@ -54,7 +54,27 @@ function createWindow() {
   return win
 }
 
-// â”€â”€ App ready â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Retry periodico registrazioni pendenti (indipendente da login) ──────────
+const SIGNUP_RETRY_INTERVAL_MS = 60 * 1000
+let signupRetryIntervalId = null
+
+function avviaRetrySignupPendenti() {
+  if (!supabase || !sincronizzaRegistrazioniPendenti) return null
+  return setInterval(async () => {
+    try {
+      const online = controllaConnessione ? await controllaConnessione(supabase) : false
+      if (!online) return
+      const risultato = await sincronizzaRegistrazioniPendenti()
+      if (risultato.processed > 0) {
+        console.log('[Auth] Retry automatico registrazioni pendenti:', risultato)
+      }
+    } catch (err) {
+      console.error('[Auth] Retry automatico registrazioni pendenti fallito:', err?.message || err)
+    }
+  }, SIGNUP_RETRY_INTERVAL_MS)
+}
+
+// ── App ready ──────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   // 1. Inizializza database (createTables viene chiamato internamente da getDb)
   const db = getDb()
@@ -63,10 +83,21 @@ app.whenReady().then(async () => {
     try {
       const status = await getSupabaseConnectionStatus?.(supabase)
       console.log('[Supabase] Diagnostica iniziale:', status)
+      if (status?.online) {
+        try {
+          const risultatoSignup = await sincronizzaRegistrazioniPendenti()
+          if (risultatoSignup.processed > 0) {
+            console.log('[Auth] Retry immediato registrazioni pendenti all\'avvio:', risultatoSignup)
+          }
+        } catch (err) {
+          console.error('[Auth] Retry immediato registrazioni pendenti fallito:', err?.message || err)
+        }
+      }
     } catch (error) {
       const diagnostic = require('./core/sync').formatSupabaseDiagnostic?.('bootstrap', error)
       console.error('[Supabase] Diagnostica iniziale fallita:', diagnostic)
     }
+    signupRetryIntervalId = avviaRetrySignupPendenti()
   }
 
   // 2. Registra tutti gli IPC handler
@@ -113,14 +144,22 @@ app.whenReady().then(async () => {
 
   ipcMain.removeHandler('sync-manuale')
   ipcMain.handle('sync-manuale', async () => {
-    if (!syncCoda || !supabase) return { processed: 0, synced: 0, failed: 0 }
+    const risultatoSignup = sincronizzaRegistrazioniPendenti
+      ? await sincronizzaRegistrazioniPendenti().catch((err) => {
+          console.error('[Auth] Errore retry registrazioni pendenti:', err.message)
+          return { processed: 0, synced: 0, failed: 0 }
+        })
+      : { processed: 0, synced: 0, failed: 0 }
+
+    if (!syncCoda || !supabase) return { ...risultatoSignup, coda: { processed: 0, synced: 0, failed: 0 } }
     const utente = getUtenteCorrente()
-    if (!utente?.id) return { processed: 0, synced: 0, failed: 0 }
+    if (!utente?.id) return { ...risultatoSignup, coda: { processed: 0, synced: 0, failed: 0 } }
     try {
-      return await syncCoda(db, supabase, utente.id)
+      const risultatoCoda = await syncCoda(db, supabase, utente.id)
+      return { ...risultatoSignup, coda: risultatoCoda }
     } catch (err) {
       console.error('[Sync] Errore sync manuale:', err.message)
-      return { processed: 0, synced: 0, failed: 0, error: err.message }
+      return { ...risultatoSignup, coda: { processed: 0, synced: 0, failed: 0, error: err.message } }
     }
   })
 

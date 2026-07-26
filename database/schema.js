@@ -148,6 +148,17 @@ function createTables(db) {
 			updated_at          TEXT    DEFAULT (datetime('now'))
 		);
 
+		CREATE TABLE IF NOT EXISTS signup_pendenti (
+			id               INTEGER PRIMARY KEY AUTOINCREMENT,
+			email            TEXT    NOT NULL UNIQUE,
+			password_cifrata TEXT    NOT NULL,
+			tentativi        INTEGER NOT NULL DEFAULT 0,
+			stato            TEXT    NOT NULL DEFAULT 'pending',
+			ultimo_errore    TEXT,
+			creato_il        TEXT    DEFAULT (datetime('now')),
+			updated_at       TEXT    DEFAULT (datetime('now'))
+		);
+
 		CREATE TABLE IF NOT EXISTS auth_session (
 			id            INTEGER PRIMARY KEY CHECK (id = 1),
 			user_id       TEXT,

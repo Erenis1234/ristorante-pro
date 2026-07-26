@@ -1,5 +1,6 @@
 const crypto = require('crypto')
 const { getDb } = require('./db-manager')
+const { cifra, decifra } = require('./crypto-utils')
 
 let supabase = null
 try {
@@ -10,6 +11,20 @@ try {
 
 const PASSWORD_RESET_COOLDOWN_MS = 20000
 let lastPasswordResetRequestAt = 0
+
+// Errori di signUp considerati transitori: vale la pena riaccodare il tentativo
+// (rete assente, timeout, rate limit, errori 5xx del servizio Supabase Auth).
+// Errori come "email invalida" o "utente già registrato" sono permanenti: non
+// hanno senso da riprovare automaticamente e non vengono accodati.
+function isSupabaseAuthErrorRetryable(error) {
+  const status = Number(error?.status)
+  if (status === 429 || (status >= 500 && status < 600)) {
+    return true
+  }
+
+  const message = error?.message || String(error || '')
+  return /fetch failed|ENOTFOUND|ECONNREFUSED|network|timeout|Failed to fetch|rate limit/i.test(message)
+}
 
 function normalizeEmail(email) {
 	return String(email || '').trim().toLowerCase()
@@ -400,6 +415,105 @@ async function login(email, password) {
 	}
 }
 
+const MAX_TENTATIVI_SIGNUP_PENDENTE = 20
+
+// Accoda una registrazione fallita per un motivo transitorio (rete assente,
+// rate limit, errore 5xx) in modo che venga ritentata automaticamente da
+// sincronizzaRegistrazioniPendenti() quando la connessione torna disponibile.
+// La password viene salvata cifrata con CRYPTO_KEY (mai in chiaro) e rimossa
+// non appena il retry ha successo.
+function accodaRegistrazionePendente(email, password) {
+	const database = getDb()
+	const passwordCifrata = cifra(password)
+
+	database.prepare(
+		`INSERT INTO signup_pendenti (email, password_cifrata, stato, tentativi, ultimo_errore, updated_at)
+		 VALUES (?, ?, 'pending', 0, NULL, datetime('now'))
+		 ON CONFLICT(email) DO UPDATE SET
+			 password_cifrata = excluded.password_cifrata,
+			 stato = 'pending',
+			 updated_at = datetime('now')`
+	).run(email, passwordCifrata)
+}
+
+// Variante "sicura" da chiamare nei rami catch: non deve mai far fallire il
+// flusso di registrazione principale se l'accodamento stesso ha un problema.
+function accodaRegistrazionePendenteSicura(email, password) {
+	try {
+		accodaRegistrazionePendente(email, password)
+		console.warn('[Auth] Registrazione accodata per retry automatico verso Supabase:', email)
+	} catch (queueErr) {
+		console.error('[Auth] Impossibile accodare la registrazione pendente:', queueErr.message)
+	}
+}
+
+function rimuoviRegistrazionePendente(email) {
+	getDb().prepare('DELETE FROM signup_pendenti WHERE lower(email) = lower(?)').run(email)
+}
+
+// Ritenta le registrazioni accodate verso Supabase Auth. Va richiamata
+// periodicamente (quando la connessione è disponibile) e manualmente dal
+// pulsante di sync. Non richiede un utente autenticato: le registrazioni
+// pendenti esistono per definizione prima che l'utente riesca ad accedere.
+async function sincronizzaRegistrazioniPendenti() {
+	const result = { processed: 0, synced: 0, failed: 0 }
+
+	if (!supabase) {
+		return result
+	}
+
+	const database = getDb()
+	const pendenti = database.prepare(
+		`SELECT * FROM signup_pendenti WHERE stato = 'pending' AND tentativi < ? ORDER BY id ASC`
+	).all(MAX_TENTATIVI_SIGNUP_PENDENTE)
+
+	for (const riga of pendenti) {
+		result.processed += 1
+
+		let password
+		try {
+			password = decifra(riga.password_cifrata)
+		} catch (err) {
+			database.prepare(
+				`UPDATE signup_pendenti SET stato = 'error', ultimo_errore = ?, updated_at = datetime('now') WHERE id = ?`
+			).run('Impossibile decifrare la password salvata: ' + err.message, riga.id)
+			result.failed += 1
+			continue
+		}
+
+		try {
+			const { error } = await supabase.auth.signUp({ email: riga.email, password })
+			const giaRegistrato = /already registered|already exists/i.test(error?.message || '')
+			if (error && !giaRegistrato) {
+				throw error
+			}
+
+			// Se l'utente risulta già registrato su Supabase (creato da un tentativo
+			// precedente andato a buon fine ma non tracciato localmente), consideriamo
+			// la coda risolta: l'obiettivo (utente presente su Supabase) è raggiunto.
+			database.prepare('DELETE FROM signup_pendenti WHERE id = ?').run(riga.id)
+			result.synced += 1
+			console.log('[Auth] Registrazione pendente sincronizzata con Supabase:', riga.email)
+		} catch (err) {
+			const message = err?.message || String(err)
+			if (isSupabaseAuthErrorRetryable(err)) {
+				database.prepare(
+					`UPDATE signup_pendenti SET tentativi = tentativi + 1, ultimo_errore = ?, updated_at = datetime('now') WHERE id = ?`
+				).run(message, riga.id)
+			} else {
+				// Errore permanente (es. email ormai invalida): smette di ritentare ma resta visibile per audit.
+				database.prepare(
+					`UPDATE signup_pendenti SET stato = 'error', ultimo_errore = ?, updated_at = datetime('now') WHERE id = ?`
+				).run(message, riga.id)
+			}
+			result.failed += 1
+			console.warn('[Auth] Retry registrazione pendente fallito per', riga.email, ':', message)
+		}
+	}
+
+	return result
+}
+
 async function registrati(email, password) {
 	const normalizedIdentifier = normalizeLoginIdentifier(email)
 	if (!normalizedIdentifier.value || !password || password.length < 6) {
@@ -428,7 +542,9 @@ async function registrati(email, password) {
 			const { data, error } = await supabase.auth.signUp({ email: normalizedIdentifier.value, password })
 			if (error) {
 				if (error.status) {
-					throw new Error(error.message || 'Errore durante la registrazione.')
+					const httpError = new Error(error.message || 'Errore durante la registrazione.')
+					httpError.status = error.status
+					throw httpError
 				}
 				const authErrorMessage = error.message || 'Errore di registrazione Supabase'
 				const isNetworkIssue = /fetch failed|network|timeout|Failed to fetch|ENOTFOUND|ECONNREFUSED/i.test(authErrorMessage)
@@ -438,8 +554,12 @@ async function registrati(email, password) {
 					console.warn('[Auth] Supabase signUp fallito, fallback locale attivato:', authErrorMessage)
 				}
 				supabaseErrorMessage = authErrorMessage
+				if (isSupabaseAuthErrorRetryable(error)) {
+					accodaRegistrazionePendenteSicura(normalizedIdentifier.value, password)
+				}
 			} else {
 				try { registerLocalUser(normalizedIdentifier.value, password) } catch (_) { /* già esistente */ }
+				rimuoviRegistrazionePendente(normalizedIdentifier.value)
 				if (data?.session) {
 					saveSession(data.session)
 					return data
@@ -455,6 +575,9 @@ async function registrati(email, password) {
 				console.warn('[Auth] Supabase registrazione fallita, uso fallback locale:', message)
 			}
 			supabaseErrorMessage = message
+			if (isSupabaseAuthErrorRetryable(err)) {
+				accodaRegistrazionePendenteSicura(normalizedIdentifier.value, password)
+			}
 		}
 	}
 
@@ -573,4 +696,5 @@ module.exports = {
 	getUtenteCorrente,
 	controllaSessione,
 	updateProfile,
+	sincronizzaRegistrazioniPendenti,
 }

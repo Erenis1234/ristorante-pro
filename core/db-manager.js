@@ -25,9 +25,27 @@ function getDb() {
 	return db
 }
 
+// Whitelist esplicita delle tabelle raggiungibili tramite le funzioni generiche
+// salva/leggi/leggiPerId/elimina (e le varianti *Locale). Tabelle sensibili come
+// utenti_locali, auth_session, coda_sync e signup_pendenti sono gestite solo con
+// SQL dedicato (core/auth.js, db-manager.js stesso) e restano fuori di proposito:
+// non devono mai diventare raggiungibili da un handler IPC generico.
+const TABELLE_CONSENTITE = new Set([
+	'ingredienti',
+	'ricette',
+	'ricetta_ingredienti',
+	'menu',
+	'menu_voci',
+	'personale',
+	'turni',
+	'movimenti_magazzino',
+	'ordini_fornitori',
+	'ordine_fornitore_righe',
+])
+
 function ensureValidTableName(tabella) {
-	if (!/^[a-z_][a-z0-9_]*$/i.test(tabella)) {
-		throw new Error(`Nome tabella non valido: ${tabella}`)
+	if (typeof tabella !== 'string' || !TABELLE_CONSENTITE.has(tabella)) {
+		throw new Error(`Nome tabella non valido o non consentito: ${tabella}`)
 	}
 }
 

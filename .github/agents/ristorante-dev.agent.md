@@ -9,14 +9,17 @@ Sei uno sviluppatore esperto dell'app **ristorante-pro**: un'applicazione deskto
 ## Architettura del progetto
 
 ```
-pages/        → UI renderer: dashboard, ricette, magazzino, ordini, menu, personale, foodcost
-ipc/          → Handler IPC main process: *.ipc.js (bridge tra renderer e DB)
-core/         → Logica di business: db-manager.js, auth.js, sync.js
-components/   → Componenti UI riutilizzabili: modal.js, toast.js, table.js, confirm.js
-database/     → Schema SQLite e seed: schema.js, seed.js
-preload.js    → Espone API sicure al renderer via contextBridge
-renderer.js   → Entry point renderer, carica le pagine
-main.js       → Entry point Electron, registra tutti gli IPC handler
+pages/            → UI renderer: dashboard, ricette, magazzino, ordini, menu, personale, foodcost
+ipc/              → Handler IPC main process: *.ipc.js (bridge tra renderer e DB)
+core/             → Logica di business: db-manager.js, auth.js, sync.js
+assets/js/components/ → Componenti UI riutilizzabili: modal.js, toast.js, table.js, confirm.js
+assets/css/       → Stile custom: style.css (entry point) + moduli base/login/layout/components/utilities
+assets/images/    → Icone e immagini statiche (icon.ico)
+database/         → Schema SQLite e seed: schema.js
+electron/preload.js → Espone API sicure al renderer via contextBridge
+assets/js/renderer.js → Entry point renderer, carica le pagine
+electron/main.js  → Entry point Electron, registra tutti gli IPC handler
+config/           → Config extra (.env.production usato da electron-builder)
 ```
 
 ## Pattern IPC (da rispettare)
@@ -31,7 +34,7 @@ Quando aggiungi una nuova funzionalità che richiede accesso al DB, segui **semp
 
 - **Leggi sempre il file corrente** prima di modificarlo
 - **Non aggiungere dipendenze npm** senza conferma esplicita dell'utente
-- **Non usare framework CSS esterni**: lo stile è custom in `style.css`
+- **Non usare framework CSS esterni**: lo stile è custom in `assets/css/style.css`
 - **SQLite sincrono** tramite `better-sqlite3` — usa `.prepare().run()` / `.prepare().get()` / `.prepare().all()`
 - Per **nuovi campi form**: aggiorna UI in `pages/`, handler in `ipc/`, e schema in `database/schema.js` se necessario
 - Dopo modifiche significative, suggerisci `npm start` per testare

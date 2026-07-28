@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "author": "Ristorante Pro Team",
   "description": "App Electron con database SQLite locale",
-  "main": "main.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "test": "set ELECTRON_RUN_AS_NODE=1&& electron --test",
@@ -26,17 +26,13 @@
     "productName": "Ristorante Pro",
     "appId": "com.ristorantepro.app",
     "files": [
-      "main.js",
-      "preload.js",
-      "renderer.js",
+      "electron/**",
       "supabaseClient.js",
       "index.html",
-      "style.css",
       "database/**",
       "core/**",
       "ipc/**",
       "pages/**",
-      "components/**",
       "assets/**",
       "node_modules/**"
     ],
@@ -48,7 +44,7 @@
     ],
     "extraResources": [
       {
-        "from": ".env.production",
+        "from": "config/.env.production",
         "to": ".env"
       }
     ],
@@ -56,7 +52,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "assets/icon.ico",
+      "icon": "assets/images/icon.ico",
       "signAndEditExecutable": false
     },
     "nsis": {

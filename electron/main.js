@@ -4,12 +4,13 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 
 const AUTH_PAUSED = false
+const INDEX_HTML_PATH = path.join(__dirname, '..', 'index.html')
 
 // â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const { getDb }                  = require('./core/db-manager')
+const { getDb }                  = require('../core/db-manager')
 
 // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const { controllaSessione, getUtenteCorrente, sincronizzaRegistrazioniPendenti } = require('./core/auth')
+const { controllaSessione, getUtenteCorrente, sincronizzaRegistrazioniPendenti } = require('../core/auth')
 
 // ── Sync (facoltativo: richiede .env con SUPABASE_URL e SUPABASE_KEY) ─────────
 let supabase = null
@@ -19,8 +20,8 @@ let getSupabaseConnectionStatus = null
 let syncCoda = null
 let syncIntervalId = null
 try {
-  supabase = require('./core/supabase')
-  ;({ avviaSyncAutomatica, controllaConnessione, getSupabaseConnectionStatus, syncCoda } = require('./core/sync'))
+  supabase = require('../core/supabase')
+  ;({ avviaSyncAutomatica, controllaConnessione, getSupabaseConnectionStatus, syncCoda } = require('../core/sync'))
   console.log('[Main] Modulo sync Supabase caricato. Client presente:', Boolean(supabase))
 } catch (err) {
   console.error('[Main] Sync Supabase non disponibile:', err?.message || err)
@@ -28,13 +29,13 @@ try {
 }
 
 // â”€â”€ IPC handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const { registerAuthIpcHandlers }      = require('./ipc/auth.ipc')
-const { registerMenuBuilderIpcHandlers } = require('./ipc/menu-builder.ipc')
-const { registerMagazzinoIpcHandlers } = require('./ipc/magazzino.ipc')
-const { registerRicetteIpcHandlers }   = require('./ipc/ricette.ipc')
-const { registerOrdiniIpcHandlers }    = require('./ipc/ordini.ipc')
-const { registerFoodcostIpcHandlers }  = require('./ipc/foodcost.ipc')
-const { registerPersonaleIpcHandlers } = require('./ipc/personale.ipc')
+const { registerAuthIpcHandlers }      = require('../ipc/auth.ipc')
+const { registerMenuBuilderIpcHandlers } = require('../ipc/menu-builder.ipc')
+const { registerMagazzinoIpcHandlers } = require('../ipc/magazzino.ipc')
+const { registerRicetteIpcHandlers }   = require('../ipc/ricette.ipc')
+const { registerOrdiniIpcHandlers }    = require('../ipc/ordini.ipc')
+const { registerFoodcostIpcHandlers }  = require('../ipc/foodcost.ipc')
+const { registerPersonaleIpcHandlers } = require('../ipc/personale.ipc')
 
 // â”€â”€ Window factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function createWindow() {
@@ -94,7 +95,7 @@ app.whenReady().then(async () => {
         }
       }
     } catch (error) {
-      const diagnostic = require('./core/sync').formatSupabaseDiagnostic?.('bootstrap', error)
+      const diagnostic = require('../core/sync').formatSupabaseDiagnostic?.('bootstrap', error)
       console.error('[Supabase] Diagnostica iniziale fallita:', diagnostic)
     }
     signupRetryIntervalId = avviaRetrySignupPendenti()
@@ -181,7 +182,7 @@ app.whenReady().then(async () => {
   })
   // 4. Login temporaneamente in pausa: apre direttamente la shell app.
   if (AUTH_PAUSED) {
-    win.loadFile('index.html')
+    win.loadFile(INDEX_HTML_PATH)
   } else {
     // 4. Controlla la sessione salvata â†’ app o schermata login
     let sessioneValida = false
@@ -192,7 +193,7 @@ app.whenReady().then(async () => {
     }
 
     if (sessioneValida) {
-      win.loadFile('index.html')
+      win.loadFile(INDEX_HTML_PATH)
 
       // 5. Avvia sync automatica dopo il caricamento (solo se Supabase Ã¨ configurato)
       if (avviaSyncAutomatica && supabase) {
@@ -210,7 +211,7 @@ app.whenReady().then(async () => {
       }
     } else {
       // Carica index.html con hash #login: il renderer gestirÃ  la schermata di login
-      win.loadFile('index.html', { hash: 'login' })
+      win.loadFile(INDEX_HTML_PATH, { hash: 'login' })
     }
   }
 

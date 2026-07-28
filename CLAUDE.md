@@ -13,14 +13,27 @@ Stato attuale del repo, utile da sapere prima di proporre comandi che non esisto
 - `eslint` è tra le devDependencies ma non c'è nessun file di configurazione (`.eslintrc*`, `eslint.config.*`) né uno script `lint` in `package.json`.
 - Il progetto è sotto controllo di versione Git (branch `master`), con `.gitignore` che esclude `.env`, `node_modules/`, `dist/` e i file `*.db`.
 
+## Struttura cartelle
+
+Il codice sorgente è organizzato per responsabilità:
+- `electron/` — entry point Electron: `main.js` (main process) e `preload.js` (contextBridge)
+- `assets/js/` — `renderer.js` e `components/*.js` (modal, toast, confirm, table)
+- `assets/css/` — `style.css` (entry point con gli `@import`) e i moduli `base/login/layout/components/utilities.css`
+- `assets/images/` — icone statiche (`icon.ico`)
+- `pages/` — una IIFE per pagina (`window.pages.<nome>`)
+- `ipc/`, `core/`, `database/` — invariati (vedi sezioni sotto)
+- `config/` — `.env.production`, copiato come `.env` nelle risorse dell'app da electron-builder in fase di build
+
+`index.html` e `package.json` restano nella root (richiesto da Electron/npm), così come `.env`/`supabaseClient.js` (i percorsi di risoluzione di `dotenv` in `core/crypto-utils.js` e `supabaseClient.js` assumono che questi file restino a livello radice).
+
 ## Architettura
 
 ### Processo main / renderer (Electron)
-`main.js` è l'entry point: inizializza il DB (`core/db-manager.js`), registra tutti gli IPC handler (`ipc/*.ipc.js`), controlla la sessione salvata e carica `index.html` (con hash `#login` se non autenticato).
+`electron/main.js` è l'entry point: inizializza il DB (`core/db-manager.js`), registra tutti gli IPC handler (`ipc/*.ipc.js`), controlla la sessione salvata e carica `index.html` (con hash `#login` se non autenticato).
 
-`preload.js` espone `window.api` al renderer via `contextBridge` (context isolation attiva, `nodeIntegration: false`). Ogni dominio ha un proprio namespace — `window.api.menuBuilder`, `.magazzino`, `.ricette`, `.ordini`, `.foodcost`, `.personale`, `.auth`, `.sync` — mappato 1:1 sui canali IPC registrati nei rispettivi `ipc/*.ipc.js`.
+`electron/preload.js` espone `window.api` al renderer via `contextBridge` (context isolation attiva, `nodeIntegration: false`). Ogni dominio ha un proprio namespace — `window.api.menuBuilder`, `.magazzino`, `.ricette`, `.ordini`, `.foodcost`, `.personale`, `.auth`, `.sync` — mappato 1:1 sui canali IPC registrati nei rispettivi `ipc/*.ipc.js`.
 
-Il frontend è JS vanilla, senza bundler né framework: `index.html` carica in sequenza `components/*.js`, poi `pages/*.js`, poi `renderer.js` con `<script>` tag classici. Ogni file in `pages/` è una IIFE che si registra su `window.pages.<nome> = { render, initEvents, load }`; `renderer.js` (funzione `caricaPagina`) decide quale pagina mostrare in base alla sidebar.
+Il frontend è JS vanilla, senza bundler né framework: `index.html` carica in sequenza `assets/js/components/*.js`, poi `pages/*.js`, poi `assets/js/renderer.js` con `<script>` tag classici. Ogni file in `pages/` è una IIFE che si registra su `window.pages.<nome> = { render, initEvents, load }`; `assets/js/renderer.js` (funzione `caricaPagina`) decide quale pagina mostrare in base alla sidebar.
 
 ### Livello dati condiviso: `core/db-manager.js`
 Quasi tutti gli IPC handler passano da quattro funzioni generiche: `salva(tabella, dati, userId)`, `leggi(tabella, userId)`, `leggiPerId(tabella, id, userId)`, `elimina(tabella, id, userId)`. Costruiscono SQL dinamicamente in base al nome tabella (validato solo con una regex, non con whitelist) e ai campi presenti nell'oggetto `dati`. Una modifica a questo file (o a `database/schema.js`) si ripercuote potenzialmente su **tutti** i moduli — menu, magazzino, ricette, ordini fornitori, food cost, personale — contemporaneamente. È il punto con la più alta probabilità che un fix in un modulo rompa un altro modulo apparentemente scollegato.
@@ -34,13 +47,13 @@ Convenzioni da conoscere prima di toccarlo:
 ### Sync locale-cloud (opzionale)
 Il DB primario è SQLite locale (`better-sqlite3`, file in `app.getPath('userData')/ristorante.db`). Supabase (`core/supabase.js` → `supabaseClient.js`, richiede `.env` con le credenziali del progetto) è opzionale: se il modulo o le credenziali mancano, l'app resta in modalità locale senza errori bloccanti.
 
-Ogni scrittura tenta la sync immediata verso Supabase; se offline o se fallisce, l'operazione finisce nella tabella `coda_sync` (stato `pending`/`error`, contatore tentativi). `core/sync.js` (`syncCoda`) processa la coda confrontando `updated_at` locale/remoto (last-write-wins) e viene richiamato sia manualmente (canale `sync-manuale`) sia automaticamente ogni 30s (`avviaSyncAutomatica`, avviato da `main.js` dopo il login). Il controllo di connessione è stato reso affidabile usando `supabase.auth.getSession()` con timeout e log di diagnostica dettagliati: URL Supabase, presenza della `ANON KEY`, risultato della connessione, codice errore, messaggio completo e stack trace. In caso di errore il diagnostico segnala anche il file/riga dove il problema è stato rilevato.
+Ogni scrittura tenta la sync immediata verso Supabase; se offline o se fallisce, l'operazione finisce nella tabella `coda_sync` (stato `pending`/`error`, contatore tentativi). `core/sync.js` (`syncCoda`) processa la coda confrontando `updated_at` locale/remoto (last-write-wins) e viene richiamato sia manualmente (canale `sync-manuale`) sia automaticamente ogni 30s (`avviaSyncAutomatica`, avviato da `electron/main.js` dopo il login). Il controllo di connessione è stato reso affidabile usando `supabase.auth.getSession()` con timeout e log di diagnostica dettagliati: URL Supabase, presenza della `ANON KEY`, risultato della connessione, codice errore, messaggio completo e stack trace. In caso di errore il diagnostico segnala anche il file/riga dove il problema è stato rilevato.
 
 ### Autenticazione
 `core/auth.js` prova prima Supabase Auth (`signInWithPassword`); se non disponibile o se fallisce con un errore non-HTTP, fa fallback su utenti locali salvati in SQLite (tabella `utenti_locali`, password con `scrypt` + salt, confronto con `timingSafeEqual`). La sessione (locale o Supabase) è sempre persistita nella tabella `auth_session` (riga singola, `id = 1`) e riletta ad ogni avvio da `controllaSessione()`.
 
 ### UI / renderer
-Il renderer usa `renderer.js` e `index.html` per gestire topbar, sidebar, menu profilo e caricamento delle pagine. Il menu profilo deve essere chiuso in modo esplicito su click esterno, pressione di `Esc`, cambio pagina e logout; eventuali refactor devono preservare questo comportamento per evitare che il menu resti visibile erroneamente.
+Il renderer usa `assets/js/renderer.js` e `index.html` per gestire topbar, sidebar, menu profilo e caricamento delle pagine. Il menu profilo deve essere chiuso in modo esplicito su click esterno, pressione di `Esc`, cambio pagina e logout; eventuali refactor devono preservare questo comportamento per evitare che il menu resti visibile erroneamente.
 
 ### Attenzione all'omonimia "ordini"
 La pagina e l'handler chiamati "ordini" (`pages/ordini.js`, `ipc/ordini.ipc.js`) gestiscono gli **ordini ai fornitori** (`ordini_fornitori`/`ordine_fornitore_righe`), non ordini al tavolo/asporto — quella funzionalità non esiste nell'app (le vecchie tabelle `ordini`/`ordine_righe` e i moduli `core/menu-service.js`, `menu-reader.js`, `menu-writer.js` erano residui morti di un'iterazione precedente e sono stati rimossi).

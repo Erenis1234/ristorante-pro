@@ -91,3 +91,35 @@ ul {
   padding-left: 20px;
   color: #594d40;
 }
+
+.footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.footer a {
+  color: var(--accent-2);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+.card h2 {
+  font-size: 22px;
+  margin: 28px 0 8px;
+}
+
+.card h2:first-of-type {
+  margin-top: 20px;
+}
+
+.card .updated {
+  font-size: 14px;
+  color: #8a7a68;
+  margin-top: -4px;
+}

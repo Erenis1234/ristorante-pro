@@ -9,7 +9,8 @@
     "test": "set ELECTRON_RUN_AS_NODE=1&& electron --test",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "build": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder",
-    "desktop": "powershell -ExecutionPolicy Bypass -File .\\scripts\\create-desktop-shortcut.ps1"
+    "desktop": "powershell -ExecutionPolicy Bypass -File .\\scripts\\create-desktop-shortcut.ps1",
+    "generate-icons": "node scripts/generate-store-icons.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",
@@ -20,7 +21,8 @@
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
     "electron-rebuild": "^3.2.9",
-    "eslint": "^10.1.0"
+    "eslint": "^10.1.0",
+    "sharp": "^0.33.5"
   },
   "build": {
     "productName": "Ristorante Pro",
@@ -50,7 +52,8 @@
     ],
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "appx"
       ],
       "icon": "assets/images/icon.ico",
       "signAndEditExecutable": false
@@ -61,6 +64,12 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Ristorante Pro"
+    },
+    "appx": {
+      "identityName": "TODO-nome-riservato-partner-center",
+      "publisher": "TODO-CN-da-partner-center",
+      "publisherDisplayName": "TODO-nome-editore-partner-center",
+      "applicationId": "RistorantePro"
     }
   }
 }

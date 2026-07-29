@@ -6,12 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `npm start` — avvia l'app Electron in locale (`electron .`)
 - `npm test` — esegue i test con il test runner nativo di Node (`node --test`), nessuna dipendenza aggiuntiva. Copertura minima su `core/db-manager.js` in `core/db-manager.test.js` (isolamento per `user_id`, upsert, validazione nome tabella, coda_sync)
-- `npm run build` — build Windows (NSIS) con electron-builder, output in `dist/`
+- `npm run build` — build Windows (NSIS + AppX/MSIX) con electron-builder, output in `dist/`. Il target `appx` richiede i placeholder in `build.appx` di `package.json` sostituiti con i valori reali riservati su Microsoft Partner Center prima di poter generare un pacchetto installabile/pubblicabile
+- `npm run generate-icons` — genera con `sharp` i tile PNG richiesti dal Microsoft Store (44x44, 71x71, 150x150, 310x150, 310x310) a partire da un'immagine sorgente PNG (default `assets/images/icon-source.png`, sovrascrivibile passando un percorso come argomento), salvandoli in `assets/images/store/`. Vedi `scripts/generate-store-icons.js`
 - `npm run postinstall` — ricompila `better-sqlite3` per Electron (`electron-rebuild`), gira automaticamente dopo `npm install`
 
 Stato attuale del repo, utile da sapere prima di proporre comandi che non esistono:
 - `eslint` è tra le devDependencies ma non c'è nessun file di configurazione (`.eslintrc*`, `eslint.config.*`) né uno script `lint` in `package.json`.
 - Il progetto è sotto controllo di versione Git (branch `master`), con `.gitignore` che esclude `.env`, `node_modules/`, `dist/` e i file `*.db`.
+- Per la checklist completa di pubblicazione su Microsoft Store (appx, icone, Partner Center, WACK, submission) vedi [PUBLISHING.md](PUBLISHING.md) nella root del repo.
 
 ## Struttura cartelle
 
@@ -62,3 +64,12 @@ La pagina e l'handler chiamati "ordini" (`pages/ordini.js`, `ipc/ordini.ipc.js`)
 Tabelle principali: `ingredienti`, `ricette` (include `categoria` — una delle 5 categorie fisse antipasto/primo/secondo/dolce/salsa usate anche per raggruppare la vista in `pages/ricette.js` — `foto`, immagine caricata come stringa base64/data URL, e `prezzo_vendita`, usato da `ipc/foodcost.ipc.js` come prezzo di riferimento per il calcolo del margine) + `ricetta_ingredienti` (`ingrediente_id` nullable: collegato a `ingredienti` per il costo food cost via `prezzo_kg`, oppure testo libero in `nome` se l'ingrediente non è a catalogo — esplicitamente indipendenti dal magazzino per il modulo ricette, vedi commento in cima a `ricette.ipc.js`, ma referenziati da `ipc/foodcost.ipc.js` per il calcolo costi), `menu` (`nome`, `tipo` — `giornaliero`/`settimanale` — `descrizione`) + `menu_voci` (righe libere del menu: `nome`, `prezzo`, `ordine`; **non** collegate da FK a `ricette`, sono uno snapshot testuale scelto al momento della composizione), `personale` + `turni`, `ordini_fornitori` + `ordine_fornitore_righe`, `movimenti_magazzino`, `utenti_locali`, `auth_session`, `coda_sync`. Le migrazioni per DB già esistenti sono funzioni `_migrate*` in coda a `createTables()`, eseguite a ogni avvio in modo idempotente (controllano `pragma('table_info(...)')` prima di alterare lo schema).
 
 Le tabelle `categorie`, `piatti` e `piatto_ingredienti` (insieme a `ipc/menu.ipc.js`, namespace `window.api.menu`, e `database/seed.js`) sono state rimosse: erano residui non più referenziati da alcun modulo attivo dopo la migrazione del food cost su `ricette`. La rimozione ha toccato solo `database/schema.js` (le `CREATE TABLE IF NOT EXISTS` non vengono più eseguite per i nuovi database) e non include una migrazione di `DROP TABLE`: eventuali database SQLite locali già esistenti mantengono quelle tabelle vuote/orfane sul disco, senza impatto funzionale. La tabella Supabase equivalente in `database/migrations/20260401_initial_schema.sql` non è stata toccata, essendo lo storico di una migrazione già applicata al progetto remoto.
+
+## Pubblicazione Microsoft Store
+
+Oltre all'installer NSIS, `build.win.target` in [package.json](package.json) include anche `"appx"`: `npm run build` genera quindi sia l'installer classico che un pacchetto AppX/MSIX, entrambi in `dist/`.
+
+- **Identity AppX**: i campi `identityName`, `publisher` e `publisherDisplayName` sono nel blocco `build.appx` di [package.json](package.json). Nel repo sono valorizzati con placeholder (`TODO-nome-riservato-partner-center`, `TODO-CN-da-partner-center`, `TODO-nome-editore-partner-center`) da sostituire con i valori reali ottenuti riservando il nome dell'app su Microsoft Partner Center — il pacchetto AppX non è installabile/pubblicabile finché questi TODO non vengono sostituiti. `applicationId` è invece già valorizzato (`RistorantePro`).
+- **Icone Store**: i tile PNG richiesti dal Microsoft Store (44x44, 71x71, 150x150, 310x150 wide, 310x310) vanno generati in `assets/images/store/` con `npm run generate-icons` (script in `scripts/generate-store-icons.js`), a partire da un'immagine sorgente ad alta risoluzione (default `assets/images/icon-source.png`). Questa cartella non contiene icone finte pre-generate: va popolata prima del build di submission.
+- **Checklist completa**: tutti i passaggi di pubblicazione (configurazione appx, generazione icone, riserva nome Partner Center, `Package.appxmanifest`, verifica `.env.production` di produzione, build su Windows con Windows SDK, verifica con Windows App Certification Kit, submission e questionario età/contenuti) sono documentati passo per passo in [PUBLISHING.md](PUBLISHING.md), nella root del repo.
+

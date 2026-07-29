@@ -4,6 +4,15 @@ const path = require('path')
 const SYNC_INTERVAL_MS = 30 * 1000
 const DEFAULT_TIMEOUT_MS = 3500
 
+function logSupabaseBootstrapDiagnostic(context, reason) {
+	const stack = new Error(reason).stack || ''
+	const fileLine = stack.split('\n').find(line => /:\d+:\d+/.test(line)) || 'n/a'
+	console.error(`[Supabase Diagnostic] ${context}`)
+	console.error('[Supabase Diagnostic] - reason:', reason)
+	console.error('[Supabase Diagnostic] - fileLine:', fileLine)
+	console.error('[Supabase Diagnostic] - stack:', stack)
+}
+
 function formatSupabaseDiagnostic(context, error) {
 	const normalizedError = error || {}
 	const message = normalizedError.message || String(normalizedError)
@@ -39,6 +48,13 @@ async function controllaConnessione(supabaseClient = null, timeoutMs = DEFAULT_T
 		const diagnostic = formatSupabaseDiagnostic('controllaConnessione', new Error('Client Supabase non disponibile'))
 		logSupabaseDiagnostic('controllaConnessione', diagnostic)
 		console.warn('[Sync] Controllo connessione fallito: client Supabase non disponibile.')
+		return false
+	}
+
+	if (!supabaseClient.auth || typeof supabaseClient.auth.getSession !== 'function') {
+		const diagnostic = formatSupabaseDiagnostic('controllaConnessione', new Error('Client Supabase senza auth.getSession'))
+		logSupabaseDiagnostic('controllaConnessione', diagnostic)
+		console.warn('[Sync] Controllo connessione fallito: client Supabase senza auth.getSession.')
 		return false
 	}
 
@@ -80,6 +96,15 @@ async function getSupabaseConnectionStatus(supabaseClient = null, timeoutMs = DE
 			online: false,
 			label: 'Supabase offline',
 			reason: 'Client Supabase non disponibile',
+		}
+	}
+
+	if (!supabaseClient.auth || typeof supabaseClient.auth.getSession !== 'function') {
+		return {
+			configured: false,
+			online: false,
+			label: 'Supabase offline',
+			reason: 'Client Supabase senza auth.getSession',
 		}
 	}
 

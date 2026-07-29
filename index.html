@@ -81,6 +81,7 @@
 
     <!-- Topbar ────────────────────────────────────────────── -->
     <div id="topbar">
+      <button id="btn-sidebar" class="topbar-icon-btn" type="button" aria-label="Apri menu" aria-expanded="false">☰</button>
       <span id="topbar-title">Dashboard</span>
 
       <!-- Stato connessione -->
@@ -145,6 +146,8 @@
 
     <!-- Layout sidebar + contenuto ───────────────────────── -->
     <div id="layout">
+
+      <button id="sidebar-backdrop" class="hidden" type="button" aria-label="Chiudi menu"></button>
 
       <!-- Sidebar ─────────────────────────────────────────── -->
       <aside id="sidebar">
@@ -409,6 +412,20 @@
         updatePasswordHint()
       }
 
+      function getAuthApiOrThrow(context) {
+        const authApi = window.api && window.api.auth
+        if (authApi) return authApi
+
+        const stack = new Error('window.api.auth non disponibile').stack || ''
+        const fileLine = stack.split('\n').find((line) => /:\d+:\d+/.test(line)) || 'n/a'
+        console.error('[Supabase Diagnostic] index.html login')
+        console.error('[Supabase Diagnostic] - reason: window.api.auth non disponibile')
+        console.error('[Supabase Diagnostic] - context:', context)
+        console.error('[Supabase Diagnostic] - fileLine:', fileLine)
+        console.error('[Supabase Diagnostic] - stack:', stack)
+        throw new Error('API auth non disponibile. Riavvia l\'app e verifica il preload.')
+      }
+
       tabBtns.forEach((b) =>
         b.addEventListener('click', () => setTab(b.dataset.tab))
       )
@@ -444,7 +461,8 @@
         if (currentTab === 'forgot') {
           try {
             btnAccedi.disabled = true
-            const recoveryResult = await window.api.auth.recuperaPassword(email)
+            const authApi = getAuthApiOrThrow('recuperaPassword')
+            const recoveryResult = await authApi.recuperaPassword(email)
             if (!recoveryResult?.success) {
               throw new Error(recoveryResult?.message || "Errore nell'invio del link.")
             }
@@ -466,8 +484,12 @@
         }
         try {
           btnAccedi.disabled = true
-          await window.api.auth.login(email, pwd)
-          window.api.sync.avviaAuto().catch(() => {})
+          const authApi = getAuthApiOrThrow('login')
+          await authApi.login(email, pwd)
+          const syncApi = window.api && window.api.sync && window.api.sync.avviaAuto
+          if (syncApi) {
+            syncApi().catch(() => {})
+          }
           window.location.hash = ''
           window.dispatchEvent(new CustomEvent('app:login-success'))
         } catch (e) {
@@ -497,9 +519,13 @@
         }
         try {
           btnReg.disabled = true
-          const registrazione = await window.api.auth.registrati(email, pwd)
-          await window.api.auth.login(email, pwd)
-          window.api.sync.avviaAuto().catch(() => {})
+          const authApi = getAuthApiOrThrow('registrati')
+          const registrazione = await authApi.registrati(email, pwd)
+          await authApi.login(email, pwd)
+          const syncApi = window.api && window.api.sync && window.api.sync.avviaAuto
+          if (syncApi) {
+            syncApi().catch(() => {})
+          }
           if (registrazione?.supabaseError) {
             const avvisoMsg = `Registrazione salvata solo in locale: Supabase non ha completato la sincronizzazione (motivo: ${registrazione.supabaseErrorMessage || 'errore sconosciuto'}).`
             showWarn(avvisoMsg)
@@ -534,10 +560,6 @@
   </script>
 </body>
 </html>
-
-
-
-
 
 
 

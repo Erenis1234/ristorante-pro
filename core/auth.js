@@ -9,6 +9,29 @@ try {
   console.warn('[Auth] Modalità locale attiva.')
 }
 
+function logSupabaseDiagnostic(context, reason) {
+	const stack = new Error(reason).stack || ''
+	const fileLine = stack.split('\n').find(line => /:\d+:\d+/.test(line)) || 'n/a'
+	console.error(`[Supabase Diagnostic] ${context}`)
+	console.error('[Supabase Diagnostic] - reason:', reason)
+	console.error('[Supabase Diagnostic] - fileLine:', fileLine)
+	console.error('[Supabase Diagnostic] - stack:', stack)
+}
+
+function getSupabaseClientOrLog(context, requireAuth = false) {
+	if (!supabase) {
+		logSupabaseDiagnostic(context, 'Client Supabase non disponibile (require nullo o fallback offline).')
+		return null
+	}
+
+	if (requireAuth && !supabase.auth) {
+		logSupabaseDiagnostic(context, 'Client Supabase privo di proprietà auth.')
+		return null
+	}
+
+	return supabase
+}
+
 const PASSWORD_RESET_COOLDOWN_MS = 20000
 let lastPasswordResetRequestAt = 0
 
@@ -259,7 +282,11 @@ function updateLocalProfile(profileData) {
 }
 
 async function syncProfileToSupabase(profileData) {
-	if (!supabase) {
+	const supabaseClient = getSupabaseClientOrLog('syncProfileToSupabase')
+	if (!supabaseClient || typeof supabaseClient.from !== 'function') {
+		if (supabaseClient) {
+			logSupabaseDiagnostic('syncProfileToSupabase', 'Client Supabase privo di metodo from().')
+		}
 		return null
 	}
 
@@ -275,7 +302,7 @@ async function syncProfileToSupabase(profileData) {
 			avatar_url: profileData?.avatar || currentUser?.user_metadata?.avatar || null,
 		}
 
-		const { error } = await supabase.from('profiles').upsert({
+		const { error } = await supabaseClient.from('profiles').upsert({
 			id: currentUser.id,
 			...updates,
 		}, { onConflict: 'id' })
@@ -355,13 +382,14 @@ async function restoreSessionFromStorage() {
 		return savedSession
 	}
 
-	if (!supabase) {
+	const supabaseClient = getSupabaseClientOrLog('restoreSessionFromStorage', true)
+	if (!supabaseClient) {
 		return savedSession
 	}
 
 	let data, error
 	try {
-		;({ data, error } = await supabase.auth.setSession({
+		;({ data, error } = await supabaseClient.auth.setSession({
 			access_token: saved.access_token,
 			refresh_token: saved.refresh_token,
 		}))
@@ -385,12 +413,13 @@ async function login(email, password) {
 		throw new Error('Email, telefono e password sono obbligatori.')
 	}
 
-	if (supabase) {
+	const supabaseClient = getSupabaseClientOrLog('login', true)
+	if (supabaseClient) {
 		try {
 			const payload = normalizedIdentifier.type === 'phone'
 				? { phone: normalizedIdentifier.value, password }
 				: { email: normalizedIdentifier.value, password }
-			const { data, error } = await supabase.auth.signInWithPassword(payload)
+			const { data, error } = await supabaseClient.auth.signInWithPassword(payload)
 			if (!error && data?.session) {
 				saveSession(data.session)
 				return data
@@ -458,7 +487,8 @@ function rimuoviRegistrazionePendente(email) {
 async function sincronizzaRegistrazioniPendenti() {
 	const result = { processed: 0, synced: 0, failed: 0 }
 
-	if (!supabase) {
+	const supabaseClient = getSupabaseClientOrLog('sincronizzaRegistrazioniPendenti', true)
+	if (!supabaseClient) {
 		return result
 	}
 
@@ -482,7 +512,7 @@ async function sincronizzaRegistrazioniPendenti() {
 		}
 
 		try {
-			const { error } = await supabase.auth.signUp({ email: riga.email, password })
+			const { error } = await supabaseClient.auth.signUp({ email: riga.email, password })
 			const giaRegistrato = /already registered|already exists/i.test(error?.message || '')
 			if (error && !giaRegistrato) {
 				throw error
@@ -537,9 +567,10 @@ async function registrati(email, password) {
 
 	let supabaseErrorMessage = null
 
-	if (supabase) {
+	const supabaseClient = getSupabaseClientOrLog('registrati', true)
+	if (supabaseClient) {
 		try {
-			const { data, error } = await supabase.auth.signUp({ email: normalizedIdentifier.value, password })
+			const { data, error } = await supabaseClient.auth.signUp({ email: normalizedIdentifier.value, password })
 			if (error) {
 				if (error.status) {
 					const httpError = new Error(error.message || 'Errore durante la registrazione.')
@@ -603,12 +634,13 @@ async function logout() {
 		return true
 	}
 
-	if (supabase && saved?.access_token && saved?.refresh_token) {
-		await supabase.auth.setSession({
+	const supabaseClient = getSupabaseClientOrLog('logout', true)
+	if (supabaseClient && saved?.access_token && saved?.refresh_token) {
+		await supabaseClient.auth.setSession({
 			access_token: saved.access_token,
 			refresh_token: saved.refresh_token,
 		})
-		const { error } = await supabase.auth.signOut()
+		const { error } = await supabaseClient.auth.signOut()
 		clearSavedSession()
 		if (error) throw error
 		return true
@@ -621,14 +653,10 @@ async function logout() {
 
 async function recuperaPassword(email) {
 	const normalizedEmail = normalizeEmail(email)
+	const supabaseClient = getSupabaseClientOrLog('recuperaPassword', true)
 
-	if (!supabase) {
+	if (!supabaseClient) {
 		return buildPasswordRecoveryResult(false, 'Recupero password non disponibile in modalita offline. Verifica la connessione o registrati nuovamente.')
-	}
-
-	const localUser = findLocalUserByEmail(normalizedEmail)
-	if (localUser && !supabase) {
-		return buildPasswordRecoveryResult(false, 'Il recupero password non e disponibile per gli account online.')
 	}
 
 	const remainingCooldownMs = getPasswordResetCooldownRemainingMs()
@@ -639,7 +667,7 @@ async function recuperaPassword(email) {
 	lastPasswordResetRequestAt = Date.now()
 
 	try {
-		const { data, error } = await supabase.auth.resetPasswordForEmail(normalizedEmail)
+		const { data, error } = await supabaseClient.auth.resetPasswordForEmail(normalizedEmail)
 
 		if (error) {
 			throw error

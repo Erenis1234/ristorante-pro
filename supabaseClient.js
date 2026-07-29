@@ -23,18 +23,44 @@ console.log('[Supabase] Variabili ambiente caricate:', {
   hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
 })
 
+function logSupabaseBootstrapDiagnostic(reason, error) {
+  const stack = error?.stack || new Error(reason).stack || ''
+  const fileLine = stack.split('\n').find(line => /:\d+:\d+/.test(line)) || 'n/a'
+  console.error('[Supabase Diagnostic] bootstrap')
+  console.error('[Supabase Diagnostic] - reason:', reason)
+  console.error('[Supabase Diagnostic] - fileLine:', fileLine)
+  if (error) {
+    console.error('[Supabase Diagnostic] - stack:', stack)
+  }
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('[Supabase] Variabili SUPABASE_URL o SUPABASE_ANON_KEY mancanti nel file .env — modalità offline attiva.')
+  logSupabaseBootstrapDiagnostic('SUPABASE_URL o SUPABASE_ANON_KEY mancanti nel file .env')
   module.exports = null
   return
 }
 
-const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-})
+let supabaseClient
+try {
+  supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  })
+} catch (error) {
+  console.error('[Supabase] Errore durante la creazione del client:', error.message)
+  logSupabaseBootstrapDiagnostic('createClient ha fallito', error)
+  module.exports = null
+  return
+}
+
+if (!supabaseClient || !supabaseClient.auth) {
+  logSupabaseBootstrapDiagnostic('Client Supabase creato senza proprietà auth')
+  module.exports = null
+  return
+}
 
 console.log('[Supabase] Client creato con successo per:', supabaseUrl)
 console.log('[Supabase] Diagnostica avviata. URL:', supabaseUrl)

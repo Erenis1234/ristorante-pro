@@ -15,8 +15,25 @@
 
   let paginaAttuale = null
 
+  function getAuthApiOrThrow(context) {
+    const authApi = window.api && window.api.auth
+    if (authApi) return authApi
+
+    const stack = new Error('window.api.auth non disponibile').stack || ''
+    const fileLine = stack.split('\n').find(line => /:\d+:\d+/.test(line)) || 'n/a'
+    console.error('[Supabase Diagnostic] renderer.js')
+    console.error('[Supabase Diagnostic] - reason: window.api.auth non disponibile')
+    console.error('[Supabase Diagnostic] - context:', context)
+    console.error('[Supabase Diagnostic] - fileLine:', fileLine)
+    console.error('[Supabase Diagnostic] - stack:', stack)
+    throw new Error('API auth non disponibile. Riavvia l\'app e verifica il preload.')
+  }
+
   // ── Init ─────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function init() {
+    const sidebarToggle = document.getElementById('btn-sidebar')
+    const sidebarBackdrop = document.getElementById('sidebar-backdrop')
+
     // Setup sidebar navigation
     const navLinks = document.querySelectorAll('#sidebar [data-page]')
     navLinks.forEach(link => {
@@ -25,8 +42,20 @@
         const pageKey = link.dataset.page
         paginaAttuale = null
         caricaPagina(pageKey)
+        chiudiSidebarMobile()
       })
     })
+
+    if (sidebarToggle) {
+      sidebarToggle.addEventListener('click', (e) => {
+        e.preventDefault()
+        impostaSidebarMobile(!document.body.classList.contains('sidebar-open'))
+      })
+    }
+
+    if (sidebarBackdrop) {
+      sidebarBackdrop.addEventListener('click', chiudiSidebarMobile)
+    }
 
     if (window.location.hash === '#login') {
       // aspetta il login, non caricare nulla
@@ -90,6 +119,7 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         chiudiMenuProfilo()
+        chiudiSidebarMobile()
       }
     })
 
@@ -97,7 +127,8 @@
     if (profileLogoutBtn) {
       profileLogoutBtn.addEventListener('click', async () => {
         try {
-          await window.api.auth.logout()
+          const authApi = getAuthApiOrThrow('profile-logout')
+          await authApi.logout()
           window.location.hash = '#login'
           location.reload()
         } catch (e) {
@@ -112,6 +143,7 @@
         profileMenu?.classList.add('hidden')
         const pageTitle = document.getElementById('topbar-title')
         if (pageTitle) pageTitle.textContent = 'Profilo'
+        chiudiSidebarMobile()
         caricaPagina('profilo')
       })
     }
@@ -121,7 +153,8 @@
     if (btnLogout) {
       btnLogout.addEventListener('click', async () => {
         try {
-          await window.api.auth.logout()
+          const authApi = getAuthApiOrThrow('logout')
+          await authApi.logout()
           window.location.hash = '#login'
           location.reload()
         } catch (e) {
@@ -129,6 +162,12 @@
         }
       })
     }
+
+    window.addEventListener('resize', () => {
+      if (!isMobileLayout()) {
+        chiudiSidebarMobile()
+      }
+    })
   })
 
   // ── Carica pagina ────────────────────────────────────────────────
@@ -201,6 +240,29 @@
     if (btnProfile) {
       btnProfile.setAttribute('aria-expanded', 'false')
     }
+  }
+
+  function isMobileLayout() {
+    return window.innerWidth <= 900
+  }
+
+  function impostaSidebarMobile(aperta) {
+    const sidebarToggle = document.getElementById('btn-sidebar')
+    const sidebarBackdrop = document.getElementById('sidebar-backdrop')
+
+    document.body.classList.toggle('sidebar-open', aperta)
+    if (sidebarToggle) {
+      sidebarToggle.setAttribute('aria-expanded', String(aperta))
+    }
+    if (sidebarBackdrop) {
+      sidebarBackdrop.classList.toggle('hidden', !aperta)
+      sidebarBackdrop.setAttribute('aria-hidden', String(!aperta))
+    }
+  }
+
+  function chiudiSidebarMobile() {
+    if (!document.body.classList.contains('sidebar-open')) return
+    impostaSidebarMobile(false)
   }
 
   function impostaMenuProfilo(aperto) {
@@ -284,7 +346,8 @@
     }
 
     try {
-      const utente = await window.api.auth.getUtenteCorrente()
+      const authApi = getAuthApiOrThrow('getUtenteCorrente')
+      const utente = await authApi.getUtenteCorrente()
       window.showAppShell(utente?.email || '')
     } catch (err) {
       console.error('[Auth] Errore aggiornamento UI sessione:', err)

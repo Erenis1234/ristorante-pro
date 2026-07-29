@@ -22,7 +22,15 @@ let syncIntervalId = null
 try {
   supabase = require('../core/supabase')
   ;({ avviaSyncAutomatica, controllaConnessione, getSupabaseConnectionStatus, syncCoda } = require('../core/sync'))
-  console.log('[Main] Modulo sync Supabase caricato. Client presente:', Boolean(supabase))
+  console.log('[Main] Modulo sync Supabase caricato. Client presente:', Boolean(supabase), 'auth presente:', Boolean(supabase?.auth))
+  if (supabase && !supabase.auth) {
+    const stack = new Error('client Supabase caricato senza auth').stack || ''
+    const fileLine = stack.split('\n').find(line => /:\d+:\d+/.test(line)) || 'n/a'
+    console.error('[Supabase Diagnostic] electron/main')
+    console.error('[Supabase Diagnostic] - reason: client Supabase caricato senza proprietà auth')
+    console.error('[Supabase Diagnostic] - fileLine:', fileLine)
+    console.error('[Supabase Diagnostic] - stack:', stack)
+  }
 } catch (err) {
   console.error('[Main] Sync Supabase non disponibile:', err?.message || err)
   console.error('[Main] Stack completo errore require Supabase/sync:', err?.stack || '(nessuno stack disponibile)')

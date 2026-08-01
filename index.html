@@ -466,6 +466,19 @@
 
           try {
             btnAccedi.disabled = true
+
+            // Prima di contattare Supabase, verifica che la connessione a
+            // internet sia effettivamente disponibile (tenta la connessione
+            // tramite auth.getSession con timeout, vedi core/sync.js).
+            const syncApi = window.api && window.api.sync
+            if (syncApi && typeof syncApi.getStatoConnessione === 'function') {
+              const online = await syncApi.getStatoConnessione()
+              if (!online) {
+                showErr('Connessione non riuscita.')
+                return
+              }
+            }
+
             const authApi = getAuthApiOrThrow('recuperaPassword')
             const recoveryResult = await authApi.recuperaPassword(email)
             if (!recoveryResult?.success) {
@@ -475,8 +488,7 @@
             setTab('accedi')
             btnAccedi.textContent = 'Accedi'
           } catch (e) {
-            const msg = e.message || "Errore nell'invio del link."
-            showErr(msg.replace('Il recupero password e disponibile solo per gli account online.', 'Il reset password e disponibile solo per gli account online.'))
+            showErr(e.message || "Errore nell'invio del link.")
           } finally {
             btnAccedi.disabled = false
           }

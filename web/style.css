@@ -123,3 +123,52 @@ ul {
   color: #8a7a68;
   margin-top: -4px;
 }
+
+.hidden {
+  display: none !important;
+}
+
+.form-group {
+  margin: 16px 0;
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--ink);
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 16px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.error-text {
+  color: #b3261e;
+  font-size: 15px;
+}
+
+button.btn {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+}
+
+button.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

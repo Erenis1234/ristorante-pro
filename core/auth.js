@@ -35,6 +35,14 @@ function getSupabaseClientOrLog(context, requireAuth = false) {
 const PASSWORD_RESET_COOLDOWN_MS = 20000
 let lastPasswordResetRequestAt = 0
 
+// Pagina statica (deploy automatico su GitHub Pages, vedi
+// .github/workflows/deploy-pages.yml e web/reset-password.html) che riceve
+// il link di reset e permette all'utente di impostare la nuova password.
+// Sovrascrivibile con la variabile d'ambiente PASSWORD_RESET_REDIRECT_URL
+// se in futuro si usa un dominio proprio o un altro hosting.
+const PASSWORD_RESET_REDIRECT_URL = process.env.PASSWORD_RESET_REDIRECT_URL
+	|| 'https://erenis1234.github.io/ristorante-pro/reset-password.html'
+
 // Errori di signUp considerati transitori: vale la pena riaccodare il tentativo
 // (rete assente, timeout, rate limit, errori 5xx del servizio Supabase Auth).
 // Errori come "email invalida" o "utente già registrato" sono permanenti: non
@@ -675,7 +683,9 @@ async function recuperaPassword(email) {
 	lastPasswordResetRequestAt = Date.now()
 
 	try {
-		const { data, error } = await supabaseClient.auth.resetPasswordForEmail(normalizedEmail)
+		const { data, error } = await supabaseClient.auth.resetPasswordForEmail(normalizedEmail, {
+			redirectTo: PASSWORD_RESET_REDIRECT_URL,
+		})
 
 		if (error) {
 			throw error

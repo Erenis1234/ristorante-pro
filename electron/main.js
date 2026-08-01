@@ -7,7 +7,8 @@ const AUTH_PAUSED = false
 const INDEX_HTML_PATH = path.join(__dirname, '..', 'index.html')
 
 // â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const { getDb }                  = require('../core/db-manager')
+const dbManager = require('../core/db-manager')
+const { getDb }                  = dbManager
 
 // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const { controllaSessione, getUtenteCorrente, sincronizzaRegistrazioniPendenti } = require('../core/auth')
@@ -164,6 +165,7 @@ app.whenReady().then(async () => {
     const utente = getUtenteCorrente()
     if (!utente?.id) return { ...risultatoSignup, coda: { processed: 0, synced: 0, failed: 0 } }
     try {
+      await dbManager.sincronizzaDaSupabase(utente.id)
       const risultatoCoda = await syncCoda(db, supabase, utente.id)
       return { ...risultatoSignup, coda: risultatoCoda }
     } catch (err) {
@@ -201,6 +203,18 @@ app.whenReady().then(async () => {
     }
 
     if (sessioneValida) {
+      try {
+        const utente = getUtenteCorrente()
+        if (utente?.id) {
+          const risultatoImport = await dbManager.sincronizzaDaSupabase(utente.id)
+          if (risultatoImport.processed > 0) {
+            console.log('[DB] Dati Supabase importati in locale:', risultatoImport)
+          }
+        }
+      } catch (err) {
+        console.error('[DB] Import remoto->locale fallito:', err?.message || err)
+      }
+
       win.loadFile(INDEX_HTML_PATH)
 
       // 5. Avvia sync automatica dopo il caricamento (solo se Supabase Ã¨ configurato)

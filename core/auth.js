@@ -53,6 +53,10 @@ function normalizeEmail(email) {
 	return String(email || '').trim().toLowerCase()
 }
 
+function isValidEmailAddress(value) {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim().toLowerCase())
+}
+
 function normalizePhone(phone) {
 	return String(phone || '')
 		.replace(/\D/g, '')
@@ -653,6 +657,10 @@ async function logout() {
 
 async function recuperaPassword(email) {
 	const normalizedEmail = normalizeEmail(email)
+	if (!isValidEmailAddress(normalizedEmail)) {
+		return buildPasswordRecoveryResult(false, 'Inserisci un indirizzo email valido per il reset password.')
+	}
+
 	const supabaseClient = getSupabaseClientOrLog('recuperaPassword', true)
 
 	if (!supabaseClient) {

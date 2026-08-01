@@ -16,7 +16,7 @@ require.cache[electronPath] = {
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 
-const { getPasswordRecoveryErrorMessage, normalizeLoginIdentifier } = require('./auth')
+const { getPasswordRecoveryErrorMessage, normalizeLoginIdentifier, recuperaPassword } = require('./auth')
 
 test('mappa errori di rete a un messaggio utente chiaro', () => {
   const message = getPasswordRecoveryErrorMessage(new Error('fetch failed'))
@@ -45,6 +45,12 @@ test('costruisce un risultato strutturato per il reset password', () => {
   const result = require('./auth').buildPasswordRecoveryResult(false, 'Errore test')
   assert.equal(result.success, false)
   assert.equal(result.message, 'Errore test')
+})
+
+test('restituisce un errore chiaro se il reset password riceve un indirizzo email non valido', async () => {
+  const result = await recuperaPassword('telefono')
+  assert.equal(result.success, false)
+  assert.match(result.message, /indirizzo email valido/i)
 })
 
 test('normalizza un numero di telefono come identificatore di accesso', () => {

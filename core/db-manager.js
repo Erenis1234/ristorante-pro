@@ -3,6 +3,8 @@ const dns = require('dns').promises
 const { app } = require('electron')
 const Database = require('better-sqlite3')
 
+const { controllaConnessione } = require('./sync')
+
 let supabase = null
 try {
   supabase = require('./supabase')
@@ -43,25 +45,129 @@ const TABELLE_CONSENTITE = new Set([
 	'ordine_fornitore_righe',
 ])
 
+const BACKEND_CACHE_TTL_MS = 10 * 1000
+let backendModeCache = { mode: 'local', checkedAt: 0 }
+let remoteTableAvailabilityCache = {}
+
 function ensureValidTableName(tabella) {
 	if (typeof tabella !== 'string' || !TABELLE_CONSENTITE.has(tabella)) {
 		throw new Error(`Nome tabella non valido o non consentito: ${tabella}`)
 	}
 }
 
-async function haInternet() {
-	try {
-		await dns.lookup('google.com')
-		return true
-	} catch (_error) {
+function isMissingRemoteTableError(error) {
+	const message = error?.message || String(error || '')
+	return /could not find the table|relation .* does not exist|schema cache|42p01|pgrst205|does not exist/i.test(message)
+}
+
+async function hasRemoteTable(tabella) {
+	if (!supabase) {
 		return false
+	}
+
+	const cacheKey = `${tabella}:${supabase?.auth ? 'auth' : 'noauth'}`
+	const cached = remoteTableAvailabilityCache[cacheKey]
+	if (cached !== undefined) {
+		return cached
+	}
+
+	try {
+		const { error } = await supabase.from(tabella).select('id', { count: 'exact', head: true })
+		if (error) {
+			const available = !isMissingRemoteTableError(error)
+			remoteTableAvailabilityCache[cacheKey] = available
+			return available
+		}
+		remoteTableAvailabilityCache[cacheKey] = true
+		return true
+	} catch (error) {
+		const available = !isMissingRemoteTableError(error)
+		remoteTableAvailabilityCache[cacheKey] = available
+		return available
 	}
 }
 
-function upsertSQLite(database, tabella, dati, userId) {
+async function getActiveBackend(forceRefresh = false, tabella = null) {
+	if (!supabase) {
+		return 'local'
+	}
+
+	const now = Date.now()
+	if (!forceRefresh && backendModeCache.mode && now - backendModeCache.checkedAt < BACKEND_CACHE_TTL_MS) {
+		return backendModeCache.mode
+	}
+
+	try {
+		await dns.lookup('google.com')
+	} catch (_error) {
+		backendModeCache = { mode: 'local', checkedAt: now }
+		return 'local'
+	}
+
+	const online = await controllaConnessione(supabase)
+	if (!online) {
+		backendModeCache = { mode: 'local', checkedAt: now }
+		return 'local'
+	}
+
+	if (tabella) {
+		const remoteTableAvailable = await hasRemoteTable(tabella)
+		if (!remoteTableAvailable) {
+			backendModeCache = { mode: 'local', checkedAt: now }
+			return 'local'
+		}
+	}
+
+	const mode = online ? 'remote' : 'local'
+	backendModeCache = { mode, checkedAt: now }
+	return mode
+}
+
+async function sincronizzaDaSupabase(userId) {
+	if (!userId) {
+		throw new Error('userId obbligatorio per la sincronizzazione remote->locale')
+	}
+
+	const mode = await getActiveBackend(true)
+	if (mode !== 'remote' || !supabase) {
+		return { processed: 0, synced: 0 }
+	}
+
+	const database = getDb()
+	let synced = 0
+
+	for (const tabella of TABELLE_CONSENTITE) {
+		const backendMode = await getActiveBackend(true, tabella)
+		if (backendMode !== 'remote') {
+			continue
+		}
+
+		const { data, error } = await supabase.from(tabella).select('*')
+		if (error) {
+			if (isMissingRemoteTableError(error)) {
+				continue
+			}
+			throw error
+		}
+
+		for (const record of data || []) {
+			const recordUserId = record?.user_id
+			if (recordUserId !== undefined && recordUserId !== null && recordUserId !== userId) {
+				continue
+			}
+
+			upsertSQLite(database, tabella, record, userId, recordUserId ?? null)
+			synced += 1
+		}
+	}
+
+	return { processed: synced, synced }
+}
+
+function upsertSQLite(database, tabella, dati, userId, targetUserId = userId) {
 	const payload = {
 		...dati,
-		user_id: userId,
+		user_id: targetUserId,
 	}
 
 	const now = database.prepare("SELECT datetime('now') AS now").get().now
@@ -72,7 +178,7 @@ function upsertSQLite(database, tabella, dati, userId) {
 	if (hasId) {
 		const existing = database
 			.prepare(`SELECT id FROM ${tabella} WHERE id = ? AND (user_id = ? OR user_id IS NULL)`)
-			.get(payload.id, userId)
+			.get(payload.id, targetUserId)
 
 		if (existing) {
 			const entries = Object.entries(payload).filter(([key]) => key !== 'id')
@@ -81,11 +187,11 @@ function upsertSQLite(database, tabella, dati, userId) {
 
 			database
 				.prepare(`UPDATE ${tabella} SET ${setClause} WHERE id = ? AND (user_id = ? OR user_id IS NULL)`)
-				.run(...values, payload.id, userId)
+				.run(...values, payload.id, targetUserId)
 
 			return database
-				.prepare(`SELECT * FROM ${tabella} WHERE id = ? AND user_id = ?`)
-				.get(payload.id, userId)
+				.prepare(`SELECT * FROM ${tabella} WHERE id = ? AND (user_id = ? OR user_id IS NULL)`)
+				.get(payload.id, targetUserId)
 		}
 	}
 
@@ -99,8 +205,8 @@ function upsertSQLite(database, tabella, dati, userId) {
 		.run(...values)
 
 	return database
-		.prepare(`SELECT * FROM ${tabella} WHERE id = ? AND user_id = ?`)
-		.get(result.lastInsertRowid, userId)
+		.prepare(`SELECT * FROM ${tabella} WHERE id = ? AND (user_id = ? OR user_id IS NULL)`)
+		.get(result.lastInsertRowid, targetUserId)
 }
 
 function enqueueSync(database, tabella, recordId, payload, userId, errorMessage = null) {
@@ -127,13 +233,14 @@ async function salva(tabella, dati, userId) {
 		updated_at: localRecord.updated_at,
 	}
 
-	const online = await haInternet()
-	if (!online || !supabase) {
+	const backendMode = await getActiveBackend()
+	if (backendMode !== 'remote' || !supabase) {
 		enqueueSync(database, tabella, localRecord.id, remotePayload, userId)
 		return {
 			data: localRecord,
 			synced: false,
 			queued: true,
+			backend: 'local',
 		}
 	}
 
@@ -147,6 +254,7 @@ async function salva(tabella, dati, userId) {
 				synced: false,
 				queued: true,
 				error: error.message,
+				backend: 'local',
 			}
 		}
 
@@ -154,6 +262,7 @@ async function salva(tabella, dati, userId) {
 			data: localRecord,
 			synced: true,
 			queued: false,
+			backend: 'remote',
 		}
 	} catch (error) {
 		enqueueSync(database, tabella, localRecord.id, remotePayload, userId, error.message)
@@ -162,6 +271,7 @@ async function salva(tabella, dati, userId) {
 			synced: false,
 			queued: true,
 			error: error.message,
+			backend: 'local',
 		}
 	}
 }
@@ -271,8 +381,8 @@ async function elimina(tabella, id, userId) {
 
 	database.prepare(`DELETE FROM ${tabella} WHERE id = ? AND user_id = ?`).run(id, userId)
 
-	const online = await haInternet()
-	if (!online || !supabase) {
+	const backendMode = await getActiveBackend()
+	if (backendMode !== 'remote' || !supabase) {
 		enqueueSync(database, tabella, id, { id, user_id: userId }, userId)
 		database.prepare(
 			`UPDATE coda_sync SET azione = 'delete' WHERE id = last_insert_rowid()`
@@ -281,6 +391,7 @@ async function elimina(tabella, id, userId) {
 			deleted: true,
 			synced: false,
 			queued: true,
+			backend: 'local',
 		}
 	}
 
@@ -297,6 +408,7 @@ async function elimina(tabella, id, userId) {
 				synced: false,
 				queued: true,
 				error: error.message,
+				backend: 'local',
 			}
 		}
 
@@ -304,6 +416,7 @@ async function elimina(tabella, id, userId) {
 			deleted: true,
 			synced: true,
 			queued: false,
+			backend: 'remote',
 		}
 	} catch (error) {
 		enqueueSync(database, tabella, id, { id, user_id: userId }, userId, error.message)
@@ -315,12 +428,15 @@ async function elimina(tabella, id, userId) {
 			synced: false,
 			queued: true,
 			error: error.message,
+			backend: 'local',
 		}
 	}
 }
 
 module.exports = {
 	getDb,
+	getActiveBackend,
+	sincronizzaDaSupabase,
 	salva,
 	leggi,
 	leggiPerId,

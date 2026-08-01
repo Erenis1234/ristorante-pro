@@ -459,6 +459,11 @@
         }
 
         if (currentTab === 'forgot') {
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            showErr('Inserisci un indirizzo email valido per il reset password.')
+            return
+          }
+
           try {
             btnAccedi.disabled = true
             const authApi = getAuthApiOrThrow('recuperaPassword')

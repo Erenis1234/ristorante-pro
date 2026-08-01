@@ -346,6 +346,10 @@ function getPasswordRecoveryErrorMessage(err) {
 		return 'Reset password non disponibile: verifica la configurazione di Auth in Supabase (Site URL/Redirect URLs e email provider).'
 	}
 
+	if (status === 500 && /gmail\.com domain is not verified|add and verify your domain|resend/i.test(message)) {
+		return 'Reset password non disponibile: il provider email non puo inviare da gmail.com. Verifica il dominio mittente verificato in Resend/Supabase Auth.'
+	}
+
 	if (status === 429 || /only request this after|rate limit|too many requests/i.test(message)) {
 		const secondsMatch = message.match(/after\s+(\d+)\s+seconds?/i)
 		const seconds = secondsMatch ? ` ${secondsMatch[1]}` : ''

@@ -29,6 +29,15 @@ test('mappa errori di accesso/authorization a una guida su Supabase', () => {
   assert.match(message, /Site URL|Redirect URLs|email provider/i)
 })
 
+test('mappa errori Resend su dominio gmail non verificato a un messaggio chiaro', () => {
+  const message = getPasswordRecoveryErrorMessage({
+    status: 500,
+    message: 'gomail: could not send email 1: 550 "The gmail.com domain is not verified. Please, add and verify your domain on https://resend.com/domains"',
+  })
+  assert.match(message, /dominio mittente verificato/i)
+  assert.match(message, /Resend/i)
+})
+
 test('mappa i rate limit di Supabase a un messaggio di attesa', () => {
   const message = getPasswordRecoveryErrorMessage({ status: 429, message: 'For security purposes, you can only request this after 17 seconds.' })
   assert.match(message, /temporaneamente bloccato/i)

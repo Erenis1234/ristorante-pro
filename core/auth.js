@@ -35,13 +35,11 @@ function getSupabaseClientOrLog(context, requireAuth = false) {
 const PASSWORD_RESET_COOLDOWN_MS = 20000
 let lastPasswordResetRequestAt = 0
 
-// Pagina statica (deploy automatico su GitHub Pages, vedi
-// .github/workflows/deploy-pages.yml e web/reset-password.html) che riceve
-// il link di reset e permette all'utente di impostare la nuova password.
-// Sovrascrivibile con la variabile d'ambiente PASSWORD_RESET_REDIRECT_URL
-// se in futuro si usa un dominio proprio o un altro hosting.
+// Deep link custom per il reset password in Electron.
+// Va registrato sia nell'app (protocol handler) sia nella allow-list Redirect URLs
+// di Supabase Auth.
 const PASSWORD_RESET_REDIRECT_URL = process.env.PASSWORD_RESET_REDIRECT_URL
-	|| 'https://erenis1234.github.io/ristorante-pro/reset-password.html'
+	|| 'ristorantepro://reset-password'
 
 // Errori di signUp considerati transitori: vale la pena riaccodare il tentativo
 // (rete assente, timeout, rate limit, errori 5xx del servizio Supabase Auth).
@@ -238,6 +236,26 @@ function clearSavedSession() {
 	getDb().prepare('DELETE FROM auth_session WHERE id = 1').run()
 }
 
+function updateLocalUserPassword(email, password) {
+	const normalizedEmail = normalizeEmail(email)
+	if (!isValidEmailAddress(normalizedEmail) || !password) {
+		return false
+	}
+
+	const user = findLocalUserByEmail(normalizedEmail)
+	if (!user) {
+		return false
+	}
+
+	getDb().prepare(
+		`UPDATE utenti_locali
+		 SET password_hash = ?, updated_at = datetime('now')
+		 WHERE id = ?`
+	).run(buildPasswordHash(password), user.id)
+
+	return true
+}
+
 function updateLocalProfile(profileData) {
 	const database = getDb()
 	const saved = getSavedSessionRow()
@@ -387,6 +405,104 @@ function parseJson(value) {
 	}
 }
 
+function decodeUrlParamValue(value) {
+	if (!value) {
+		return ''
+	}
+
+	try {
+		return decodeURIComponent(String(value).replace(/\+/g, ' '))
+	} catch (_error) {
+		return String(value)
+	}
+}
+
+function parsePasswordRecoveryLink(recoveryUrl) {
+	if (!recoveryUrl || typeof recoveryUrl !== 'string') {
+		return null
+	}
+
+	let parsedUrl
+	try {
+		parsedUrl = new URL(recoveryUrl)
+	} catch (_error) {
+		return null
+	}
+
+	const hashParams = new URLSearchParams(
+		parsedUrl.hash.startsWith('#') ? parsedUrl.hash.slice(1) : parsedUrl.hash
+	)
+	const readParam = (key) => hashParams.get(key) || parsedUrl.searchParams.get(key) || null
+
+	return {
+		url: recoveryUrl,
+		protocol: parsedUrl.protocol,
+		hostname: parsedUrl.hostname,
+		pathname: parsedUrl.pathname || '',
+		type: readParam('type'),
+		error: readParam('error'),
+		errorCode: readParam('error_code'),
+		errorDescription: decodeUrlParamValue(readParam('error_description')),
+		accessToken: readParam('access_token'),
+		refreshToken: readParam('refresh_token'),
+		tokenHash: readParam('token_hash'),
+	}
+}
+
+function getPasswordRecoveryLinkErrorMessage(linkData) {
+	const errorDescription = decodeUrlParamValue(linkData?.errorDescription)
+	const message = errorDescription || decodeUrlParamValue(linkData?.error) || ''
+	const errorCode = String(linkData?.errorCode || '')
+
+	if (/expired|otp_expired|token.*expired/i.test(message) || /^4(0[03]|10)$/.test(errorCode)) {
+		return 'Il link di reset e scaduto. Richiedine uno nuovo dalla schermata di accesso.'
+	}
+
+	if (/invalid|bad[_\s-]?jwt|token.*invalid|access denied|forbidden|unauthorized/i.test(message)) {
+		return 'Il link di reset non e valido o e gia stato usato. Richiedine uno nuovo dalla schermata di accesso.'
+	}
+
+	return message || 'Il link di reset non e valido o non contiene i dati necessari.'
+}
+
+function getPasswordResetSessionErrorMessage(err) {
+	const message = err?.message || String(err || '')
+	const status = Number(err?.status)
+
+	if (status === 401 || status === 403 || /expired|invalid|bad[_\s-]?jwt|session.*not found|session.*missing|refresh token/i.test(message)) {
+		return 'La sessione di reset password non e piu valida. Apri di nuovo il link ricevuto via email.'
+	}
+
+	if (/fetch failed|ENOTFOUND|network|Failed to fetch/i.test(message)) {
+		return 'Impossibile verificare il link di reset: controlla la connessione internet e riprova.'
+	}
+
+	return message || 'Impossibile verificare il link di reset password.'
+}
+
+function getPasswordUpdateErrorMessage(err) {
+	const message = err?.message || String(err || '')
+	const status = Number(err?.status)
+
+	if (status === 401 || status === 403 || /expired|invalid|bad[_\s-]?jwt|session.*not found|refresh token/i.test(message)) {
+		return 'La sessione di reset e scaduta. Richiedi un nuovo link e riprova.'
+	}
+
+	if (/weak password|password should|password must|at least \d+ character/i.test(message)) {
+		return 'La nuova password e troppo debole. Usa almeno 6 caratteri e aggiungi numeri o simboli se possibile.'
+	}
+
+	if (/same password|same as the old password/i.test(message)) {
+		return 'La nuova password deve essere diversa da quella precedente.'
+	}
+
+	if (/fetch failed|ENOTFOUND|network|Failed to fetch/i.test(message)) {
+		return 'Impossibile aggiornare la password: controlla la connessione internet e riprova.'
+	}
+
+	return message || 'Errore durante il salvataggio della nuova password.'
+}
+
 async function restoreSessionFromStorage() {
 	const saved = getSavedSessionRow()
 	if (!saved?.access_token || !saved?.refresh_token) {
@@ -419,8 +535,11 @@ async function restoreSessionFromStorage() {
 		return null
 	}
 
-	saveSession(data.session)
-	return data.session
+	const nextSession = savedSession?.password_recovery
+		? { ...data.session, password_recovery: true }
+		: data.session
+	saveSession(nextSession)
+	return nextSession
 }
 
 async function login(email, password) {
@@ -701,6 +820,109 @@ async function recuperaPassword(email) {
 	}
 }
 
+async function preparePasswordReset(recoveryUrl) {
+	const supabaseClient = getSupabaseClientOrLog('preparePasswordReset', true)
+	if (!supabaseClient) {
+		return buildPasswordRecoveryResult(false, 'Reimpostazione password non disponibile in modalita offline. Verifica la connessione e riprova.')
+	}
+
+	const linkData = parsePasswordRecoveryLink(recoveryUrl)
+	if (!linkData) {
+		return buildPasswordRecoveryResult(false, 'Il link di reset non e valido. Richiedine uno nuovo dalla schermata di accesso.')
+	}
+
+	if (linkData.error || linkData.errorDescription) {
+		return buildPasswordRecoveryResult(false, getPasswordRecoveryLinkErrorMessage(linkData))
+	}
+
+	if (linkData.type && linkData.type !== 'recovery') {
+		return buildPasswordRecoveryResult(false, 'Il link ricevuto non e un link di reset password valido.')
+	}
+
+	try {
+		let data
+		let error
+
+		if (linkData.accessToken && linkData.refreshToken) {
+			;({ data, error } = await supabaseClient.auth.setSession({
+				access_token: linkData.accessToken,
+				refresh_token: linkData.refreshToken,
+			}))
+		} else if (linkData.tokenHash && linkData.type) {
+			;({ data, error } = await supabaseClient.auth.verifyOtp({
+				type: linkData.type,
+				token_hash: linkData.tokenHash,
+			}))
+		} else {
+			return buildPasswordRecoveryResult(false, 'Il link di reset non contiene un token valido. Richiedine uno nuovo dalla schermata di accesso.')
+		}
+
+		if (error || !data?.session) {
+			throw error || new Error('Sessione di recupero non disponibile.')
+		}
+
+		const recoverySession = { ...data.session, password_recovery: true }
+		saveSession(recoverySession)
+		return {
+			success: true,
+			data: {
+				email: data.session.user?.email || null,
+			},
+		}
+	} catch (err) {
+		return buildPasswordRecoveryResult(false, getPasswordResetSessionErrorMessage(err))
+	}
+}
+
+async function completePasswordReset(newPassword) {
+	const password = String(newPassword || '')
+	if (password.length < 6) {
+		return buildPasswordRecoveryResult(false, 'La nuova password deve essere di almeno 6 caratteri.')
+	}
+
+	const supabaseClient = getSupabaseClientOrLog('completePasswordReset', true)
+	if (!supabaseClient) {
+		return buildPasswordRecoveryResult(false, 'Reimpostazione password non disponibile in modalita offline. Verifica la connessione e riprova.')
+	}
+
+	const saved = getSavedSessionRow()
+	const savedSession = parseJson(saved?.session_json)
+	if (!savedSession?.password_recovery) {
+		return buildPasswordRecoveryResult(false, 'Apri di nuovo il link di reset ricevuto via email per impostare una nuova password.')
+	}
+
+	const activeSession = await restoreSessionFromStorage()
+	if (!activeSession?.password_recovery) {
+		return buildPasswordRecoveryResult(false, 'La sessione di reset e scaduta. Richiedi un nuovo link e riprova.')
+	}
+
+	try {
+		const { data, error } = await supabaseClient.auth.updateUser({ password })
+		if (error) {
+			throw error
+		}
+
+		updateLocalUserPassword(activeSession.user?.email, password)
+		clearSavedSession()
+
+		return buildPasswordRecoveryResult(true, {
+			email: activeSession.user?.email || null,
+			user: data?.user || activeSession.user || null,
+		})
+	} catch (err) {
+		return buildPasswordRecoveryResult(false, getPasswordUpdateErrorMessage(err))
+	}
+}
+
+function cancelPasswordReset() {
+	const savedSession = parseJson(getSavedSessionRow()?.session_json)
+	if (savedSession?.password_recovery) {
+		clearSavedSession()
+	}
+
+	return true
+}
+
 function getUtenteCorrente() {
 	const saved = getSavedSessionRow()
 	if (!saved) {
@@ -739,8 +961,15 @@ module.exports = {
 	registrati,
 	logout,
 	recuperaPassword,
+	preparePasswordReset,
+	completePasswordReset,
+	cancelPasswordReset,
 	normalizeLoginIdentifier,
+	parsePasswordRecoveryLink,
 	getPasswordRecoveryErrorMessage,
+	getPasswordRecoveryLinkErrorMessage,
+	getPasswordResetSessionErrorMessage,
+	getPasswordUpdateErrorMessage,
 	buildPasswordRecoveryResult,
 	buildPasswordResetCooldownErrorMessage,
 	getUtenteCorrente,

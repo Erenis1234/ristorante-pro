@@ -57,7 +57,7 @@
       sidebarBackdrop.addEventListener('click', chiudiSidebarMobile)
     }
 
-    if (window.location.hash === '#login') {
+    if (window.location.hash === '#login' || window.location.hash === '#reset-password') {
       // aspetta il login, non caricare nulla
     } else {
       void sincronizzaUiSessione(true)
@@ -67,6 +67,11 @@
     window.addEventListener('app:login-success', () => {
       void sincronizzaUiSessione(true)
       setTimeout(() => caricaPagina('dashboard'), 100)
+    })
+
+    window.addEventListener('app:auth-screen-visible', () => {
+      chiudiMenuProfilo()
+      chiudiSidebarMobile()
     })
 
     // Check connection status every 5 seconds

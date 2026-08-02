@@ -41,6 +41,14 @@
     "directories": {
       "output": "dist/"
     },
+    "protocols": [
+      {
+        "name": "Ristorante Pro",
+        "schemes": [
+          "ristorantepro"
+        ]
+      }
+    ],
     "asarUnpack": [
       "node_modules/better-sqlite3/**"
     ],

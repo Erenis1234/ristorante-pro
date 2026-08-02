@@ -25,43 +25,80 @@
       </div>
 
       <div id="login-card">
-        <!-- Tab Accedi / Registrati -->
-        <div id="login-tab-bar">
-          <button class="login-tab active" data-tab="accedi">Accedi</button>
-          <button class="login-tab"        data-tab="registrati">Registrati</button>
-        </div>
-
         <!-- Messaggi feedback -->
         <div id="login-error"></div>
         <div id="login-warning"></div>
         <div id="login-success"></div>
 
-        <!-- Form -->
-        <div class="form-group">
-          <label class="form-label" for="input-email">Email o numero di telefono</label>
-          <input id="input-email" type="text" class="form-input"
-                 placeholder="chef@ristorante.it oppure +39 333 1234567" autocomplete="username" />
-        </div>
-
-        <div class="form-group" id="group-password">
-          <label class="form-label" for="input-password">Password</label>
-          <input id="input-password" type="password" class="form-input"
-                 placeholder="••••••••" autocomplete="current-password" />
-          <div id="password-help" class="password-help">Almeno 6 caratteri per registrarti.</div>
-          <div id="password-strength" class="password-strength hidden" aria-live="polite">
-            <div id="password-strength-bar" class="password-strength-bar"></div>
-            <span id="password-strength-label">Sicurezza: debole</span>
+        <div id="auth-panel">
+          <!-- Tab Accedi / Registrati -->
+          <div id="login-tab-bar">
+            <button class="login-tab active" data-tab="accedi">Accedi</button>
+            <button class="login-tab"        data-tab="registrati">Registrati</button>
           </div>
+
+          <!-- Form -->
+          <div class="form-group">
+            <label class="form-label" for="input-email">Email o numero di telefono</label>
+            <input id="input-email" type="text" class="form-input"
+                   placeholder="chef@ristorante.it oppure +39 333 1234567" autocomplete="username" />
+          </div>
+
+          <div class="form-group" id="group-password">
+            <label class="form-label" for="input-password">Password</label>
+            <input id="input-password" type="password" class="form-input"
+                   placeholder="••••••••" autocomplete="current-password" />
+            <div id="password-help" class="password-help">Almeno 6 caratteri per registrarti.</div>
+            <div id="password-strength" class="password-strength hidden" aria-live="polite">
+              <div id="password-strength-bar" class="password-strength-bar"></div>
+              <span id="password-strength-label">Sicurezza: debole</span>
+            </div>
+          </div>
+
+          <div id="forgot-help" class="auth-help hidden">
+            Il recupero password richiede connessione online.
+          </div>
+
+          <button id="btn-accedi"     class="btn btn-primary btn-login-action">Accedi</button>
+          <button id="btn-registrati" class="btn btn-primary btn-login-action btn-login-hidden">Registrati</button>
+
+          <button id="btn-forgot">Password dimenticata?</button>
         </div>
 
-        <div id="forgot-help" class="auth-help hidden">
-          Il recupero password richiede connessione online.
+        <div id="password-reset-panel" class="hidden">
+          <p id="password-reset-status" class="auth-help">Verifica del link in corso...</p>
+          <p id="password-reset-email" class="password-reset-email hidden"></p>
+
+          <form id="password-reset-form" class="hidden">
+            <div class="form-group">
+              <label class="form-label" for="input-reset-password">Nuova password</label>
+              <input id="input-reset-password" type="password" class="form-input"
+                     placeholder="••••••••" autocomplete="new-password" />
+              <div id="reset-password-help" class="password-help">
+                Usa almeno 6 caratteri. Numeri e simboli migliorano la sicurezza.
+              </div>
+              <div id="reset-password-strength" class="password-strength hidden" aria-live="polite">
+                <div id="reset-password-strength-bar" class="password-strength-bar"></div>
+                <span id="reset-password-strength-label">Sicurezza: debole</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="input-reset-password-confirm">Conferma nuova password</label>
+              <input id="input-reset-password-confirm" type="password" class="form-input"
+                     placeholder="••••••••" autocomplete="new-password" />
+            </div>
+
+            <div class="password-reset-actions">
+              <button id="btn-save-new-password" type="submit" class="btn btn-primary btn-login-action">
+                Salva nuova password
+              </button>
+              <button id="btn-cancel-password-reset" type="button" class="btn btn-secondary btn-login-action">
+                Torna all'accesso
+              </button>
+            </div>
+          </form>
         </div>
-
-        <button id="btn-accedi"     class="btn btn-primary btn-login-action">Accedi</button>
-        <button id="btn-registrati" class="btn btn-primary btn-login-action btn-login-hidden">Registrati</button>
-
-        <button id="btn-forgot">Password dimenticata?</button>
       </div>
 
     </div>
@@ -256,6 +293,19 @@
       const loginScreen = document.getElementById('login-screen')
       const appShell = document.getElementById('app-shell')
       const btnLogout = document.getElementById('btn-logout')
+      const authPanel = document.getElementById('auth-panel')
+      const passwordResetPanel = document.getElementById('password-reset-panel')
+      const passwordResetStatus = document.getElementById('password-reset-status')
+      const passwordResetEmail = document.getElementById('password-reset-email')
+      const passwordResetForm = document.getElementById('password-reset-form')
+      const inputResetPassword = document.getElementById('input-reset-password')
+      const inputResetPasswordConfirm = document.getElementById('input-reset-password-confirm')
+      const btnSaveNewPassword = document.getElementById('btn-save-new-password')
+      const btnCancelPasswordReset = document.getElementById('btn-cancel-password-reset')
+      const resetPasswordHelp = document.getElementById('reset-password-help')
+      const resetPasswordStrength = document.getElementById('reset-password-strength')
+      const resetPasswordStrengthBar = document.getElementById('reset-password-strength-bar')
+      const resetPasswordStrengthLabel = document.getElementById('reset-password-strength-label')
       const tabBtns = document.querySelectorAll('.login-tab')
       const inputEmail = document.getElementById('input-email')
       const inputPwd = document.getElementById('input-password')
@@ -274,6 +324,7 @@
       const authPausa = false
 
       let currentTab = 'accedi'
+      let currentMode = 'auth'
 
       function showErr(msg) {
         errBox.textContent = msg
@@ -309,7 +360,39 @@
         return Math.min(score, 5)
       }
 
+      function updateStrengthUi(value, strengthBox, strengthBar, strengthLabel) {
+        const score = getPasswordStrength(value)
+        const width = Math.min(100, 20 + score * 16)
+
+        if (!value) {
+          strengthBar.style.setProperty('--strength-width', '0%')
+          strengthLabel.textContent = 'Sicurezza: debole'
+          strengthBox.className = 'password-strength hidden'
+          return
+        }
+
+        strengthBar.style.setProperty('--strength-width', `${width}%`)
+
+        if (score <= 2) {
+          strengthBox.className = 'password-strength weak'
+          strengthLabel.textContent = 'Sicurezza: debole'
+        } else if (score <= 4) {
+          strengthBox.className = 'password-strength medium'
+          strengthLabel.textContent = 'Sicurezza: buona'
+        } else {
+          strengthBox.className = 'password-strength strong'
+          strengthLabel.textContent = 'Sicurezza: forte'
+        }
+      }
+
       function updatePasswordHint() {
+        if (currentMode !== 'auth') {
+          passwordHelp.classList.add('hidden')
+          passwordStrength.classList.add('hidden')
+          forgotHelp.classList.add('hidden')
+          return
+        }
+
         const pwd = inputPwd.value
 
         if (currentTab === 'forgot') {
@@ -324,32 +407,34 @@
         if (currentTab === 'registrati') {
           passwordHelp.classList.remove('hidden')
           passwordStrength.classList.remove('hidden')
-
-          const score = getPasswordStrength(pwd)
-          const width = Math.min(100, 20 + score * 16)
-          passwordStrengthBar.style.width = `${width}%`
-
-          if (!pwd) {
-            passwordStrengthBar.style.width = '0%'
-            passwordStrengthLabel.textContent = 'Sicurezza: debole'
-            passwordStrength.className = 'password-strength hidden'
-            return
-          }
-
-          if (score <= 2) {
-            passwordStrength.className = 'password-strength weak'
-            passwordStrengthLabel.textContent = 'Sicurezza: debole'
-          } else if (score <= 4) {
-            passwordStrength.className = 'password-strength medium'
-            passwordStrengthLabel.textContent = 'Sicurezza: buona'
-          } else {
-            passwordStrength.className = 'password-strength strong'
-            passwordStrengthLabel.textContent = 'Sicurezza: forte'
-          }
+          updateStrengthUi(pwd, passwordStrength, passwordStrengthBar, passwordStrengthLabel)
         } else {
           passwordHelp.classList.add('hidden')
           passwordStrength.classList.add('hidden')
         }
+      }
+
+      function updateResetPasswordHint() {
+        if (currentMode !== 'recovery') {
+          resetPasswordHelp.classList.add('hidden')
+          resetPasswordStrength.classList.add('hidden')
+          return
+        }
+
+        resetPasswordHelp.classList.remove('hidden')
+        resetPasswordStrength.classList.remove('hidden')
+        updateStrengthUi(
+          inputResetPassword.value,
+          resetPasswordStrength,
+          resetPasswordStrengthBar,
+          resetPasswordStrengthLabel
+        )
+      }
+
+      function showLoginScreen() {
+        appShell.classList.add('hidden')
+        loginScreen.classList.remove('hidden')
+        window.dispatchEvent(new CustomEvent('app:auth-screen-visible'))
       }
 
       window.showAppShell = function (email) {
@@ -360,6 +445,12 @@
 
         loginScreen.classList.add('hidden')
         appShell.classList.remove('hidden')
+        currentMode = 'auth'
+        authPanel.classList.remove('hidden')
+        passwordResetPanel.classList.add('hidden')
+        passwordResetForm.classList.add('hidden')
+        passwordResetStatus.classList.remove('hidden')
+        passwordResetEmail.classList.add('hidden')
 
         const profileMenuEl = document.getElementById('profile-menu')
         if (profileMenuEl) {
@@ -412,6 +503,62 @@
         updatePasswordHint()
       }
 
+      function resetRecoveryInputs() {
+        inputResetPassword.value = ''
+        inputResetPasswordConfirm.value = ''
+        resetPasswordStrengthBar.style.setProperty('--strength-width', '0%')
+        resetPasswordStrength.className = 'password-strength hidden'
+        resetPasswordStrengthLabel.textContent = 'Sicurezza: debole'
+      }
+
+      function setMode(mode) {
+        currentMode = mode
+        const recoveryMode = mode === 'recovery'
+
+        authPanel.classList.toggle('hidden', recoveryMode)
+        passwordResetPanel.classList.toggle('hidden', !recoveryMode)
+        if (!recoveryMode) {
+          passwordResetStatus.classList.add('hidden')
+          passwordResetForm.classList.add('hidden')
+          passwordResetEmail.classList.add('hidden')
+          resetRecoveryInputs()
+        }
+
+        updatePasswordHint()
+        updateResetPasswordHint()
+      }
+
+      function showRecoveryPending(message) {
+        setMode('recovery')
+        passwordResetStatus.textContent = message
+        passwordResetStatus.classList.remove('hidden')
+        passwordResetForm.classList.add('hidden')
+        passwordResetEmail.classList.add('hidden')
+      }
+
+      function showRecoveryReady(email) {
+        setMode('recovery')
+        passwordResetStatus.classList.add('hidden')
+        passwordResetForm.classList.remove('hidden')
+        passwordResetEmail.textContent = email
+          ? `Account verificato: ${email}`
+          : 'Link verificato. Inserisci la nuova password.'
+        passwordResetEmail.classList.remove('hidden')
+        inputResetPassword.focus()
+      }
+
+      async function exitRecoveryMode() {
+        try {
+          await getAuthApiOrThrow('cancelPasswordReset').cancelPasswordReset()
+        } catch (error) {
+          console.error('[RESET PASSWORD] Errore chiusura sessione di recovery:', error)
+        }
+
+        setMode('auth')
+        setTab('accedi')
+        window.location.hash = '#login'
+      }
+
       function getAuthApiOrThrow(context) {
         const authApi = window.api && window.api.auth
         if (authApi) return authApi
@@ -431,6 +578,9 @@
       )
 
       btnForgot.addEventListener('click', () => {
+        if (currentMode === 'recovery') {
+          return
+        }
         if (currentTab === 'forgot') {
           setTab('accedi')
           return
@@ -440,6 +590,30 @@
         btnAccedi.textContent = 'Invia link reset'
         btnReg.style.display = 'none'
       })
+
+      async function handlePasswordRecoveryLink(recoveryUrl) {
+        showLoginScreen()
+        clearFeedback()
+        window.location.hash = '#reset-password'
+        showRecoveryPending('Verifica del link di reset in corso...')
+
+        try {
+          const authApi = getAuthApiOrThrow('preparePasswordReset')
+          const result = await authApi.preparePasswordReset(recoveryUrl)
+          if (!result?.success) {
+            throw new Error(result?.message || 'Il link di reset non e valido.')
+          }
+
+          showRecoveryReady(result?.data?.email || '')
+          showOk('Link verificato. Inserisci la nuova password.')
+        } catch (e) {
+          await exitRecoveryMode()
+          showErr(e.message || 'Il link di reset non e valido o e scaduto.')
+        }
+      }
+
+      const authApi = getAuthApiOrThrow('onPasswordRecoveryLink')
+      authApi.onPasswordRecoveryLink(handlePasswordRecoveryLink)
 
       // Accedi / Invia link reset
       btnAccedi.addEventListener('click', async () => {
@@ -558,6 +732,50 @@
       })
 
       inputPwd.addEventListener('input', updatePasswordHint)
+      inputResetPassword.addEventListener('input', updateResetPasswordHint)
+
+      passwordResetForm.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        clearFeedback()
+
+        const password = inputResetPassword.value
+        const confirmPassword = inputResetPasswordConfirm.value
+
+        if (!password || password.length < 6) {
+          showErr('La nuova password deve essere di almeno 6 caratteri.')
+          return
+        }
+
+        if (password !== confirmPassword) {
+          showErr('Le due password non coincidono.')
+          return
+        }
+
+        try {
+          btnSaveNewPassword.disabled = true
+          btnSaveNewPassword.textContent = 'Salvataggio...'
+          const recoveryResult = await getAuthApiOrThrow('completePasswordReset').completePasswordReset(password)
+          if (!recoveryResult?.success) {
+            throw new Error(recoveryResult?.message || 'Errore durante il salvataggio della nuova password.')
+          }
+
+          setMode('auth')
+          setTab('accedi')
+          window.location.hash = '#login'
+          inputPwd.value = ''
+          showOk('Password aggiornata con successo. Ora puoi accedere con la nuova password.')
+        } catch (e) {
+          showErr(e.message || 'Errore durante il salvataggio della nuova password.')
+        } finally {
+          btnSaveNewPassword.disabled = false
+          btnSaveNewPassword.textContent = 'Salva nuova password'
+        }
+      })
+
+      btnCancelPasswordReset.addEventListener('click', async () => {
+        clearFeedback()
+        await exitRecoveryMode()
+      })
 
       // Invio con Enter
       ;[inputEmail, inputPwd].forEach((el) => {
@@ -569,18 +787,14 @@
         })
       })
 
-      // Auto-avanzamento se hash === login (dalla sessione scaduta)
-      if (window.location.hash !== '#login') {
-        // Lascia che renderer.js decida (controllaSessione)
+      if (window.location.hash === '#reset-password' && currentMode !== 'recovery') {
+        showLoginScreen()
+        showRecoveryPending('Attendi l\'apertura completa del link ricevuto via email...')
       }
     })()
   </script>
 </body>
 </html>
-
-
-
-
 
 
 

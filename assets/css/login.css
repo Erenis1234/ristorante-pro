@@ -159,6 +159,11 @@ user-select: none;
   display: none;
 }
 
+#auth-panel.hidden,
+#password-reset-panel.hidden {
+  display: none;
+}
+
 #btn-forgot {
   background: none;
   border: none;
@@ -182,6 +187,22 @@ user-select: none;
   color: var(--text-dim);
 }
 
+.password-reset-email {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(212,168,83,.08);
+  border: 1px solid rgba(212,168,83,.18);
+  color: var(--avorio);
+  font-size: 12.5px;
+}
+
+.password-reset-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .password-strength {
   margin-top: 8px;
   display: flex;
@@ -202,7 +223,7 @@ user-select: none;
   content: '';
   display: block;
   height: 100%;
-  width: 0;
+  width: var(--strength-width, 0%);
   transition: width .2s ease, background .2s ease;
   background: var(--danger);
 }
@@ -213,7 +234,8 @@ user-select: none;
 
 .password-strength.hidden,
 .auth-help.hidden,
-.password-help.hidden {
+.password-help.hidden,
+.password-reset-email.hidden {
   display: none;
 }
 

@@ -5,6 +5,79 @@ const path = require('path')
 
 const AUTH_PAUSED = false
 const INDEX_HTML_PATH = path.join(__dirname, '..', 'index.html')
+const DEEP_LINK_PROTOCOL = 'ristorantepro'
+let mainWindow = null
+let pendingPasswordRecoveryLink = extractDeepLinkFromArgv(process.argv)
+
+function extractDeepLinkFromArgv(argv) {
+  return (argv || []).find((value) =>
+    typeof value === 'string' && value.startsWith(`${DEEP_LINK_PROTOCOL}://`)
+  ) || null
+}
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function deliverPendingPasswordRecoveryLink() {
+  if (!pendingPasswordRecoveryLink || !mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+
+  mainWindow.webContents.send('auth:password-recovery-link', pendingPasswordRecoveryLink)
+  pendingPasswordRecoveryLink = null
+}
+
+function routePasswordRecoveryLink(recoveryUrl) {
+  if (!recoveryUrl) {
+    return
+  }
+
+  pendingPasswordRecoveryLink = recoveryUrl
+  focusMainWindow()
+
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoading()) {
+    deliverPendingPasswordRecoveryLink()
+  }
+}
+
+function registerDeepLinkProtocol() {
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL, process.execPath, [
+      path.resolve(process.argv[1]),
+    ])
+    return
+  }
+
+  app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL)
+}
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, commandLine) => {
+    const deepLink = extractDeepLinkFromArgv(commandLine)
+    focusMainWindow()
+    if (deepLink) {
+      routePasswordRecoveryLink(deepLink)
+    }
+  })
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  routePasswordRecoveryLink(url)
+})
 
 // â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const dbManager = require('../core/db-manager')
@@ -48,7 +121,7 @@ const { registerPersonaleIpcHandlers } = require('../ipc/personale.ipc')
 
 // â”€â”€ Window factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1024,
@@ -61,7 +134,11 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
   })
-  return win
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+  mainWindow.webContents.on('did-finish-load', deliverPendingPasswordRecoveryLink)
+  return mainWindow
 }
 
 // ── Retry periodico registrazioni pendenti (indipendente da login) ──────────
@@ -84,8 +161,63 @@ function avviaRetrySignupPendenti() {
   }, SIGNUP_RETRY_INTERVAL_MS)
 }
 
+async function loadInitialWindowContent(win, db) {
+  if (AUTH_PAUSED) {
+    win.loadFile(INDEX_HTML_PATH)
+    return
+  }
+
+  if (pendingPasswordRecoveryLink) {
+    win.loadFile(INDEX_HTML_PATH, { hash: 'reset-password' })
+    return
+  }
+
+  let sessioneValida = false
+  try {
+    sessioneValida = await controllaSessione()
+  } catch (err) {
+    console.error('[Auth] Errore controllo sessione:', err.message)
+  }
+
+  if (sessioneValida) {
+    try {
+      const utente = getUtenteCorrente()
+      if (utente?.id) {
+        const risultatoImport = await dbManager.sincronizzaDaSupabase(utente.id)
+        if (risultatoImport.processed > 0) {
+          console.log('[DB] Dati Supabase importati in locale:', risultatoImport)
+        }
+      }
+    } catch (err) {
+      console.error('[DB] Import remoto->locale fallito:', err?.message || err)
+    }
+
+    win.loadFile(INDEX_HTML_PATH)
+
+    if (avviaSyncAutomatica && supabase) {
+      win.webContents.once('did-finish-load', () => {
+        try {
+          const utente = getUtenteCorrente()
+          if (utente?.id) {
+            syncIntervalId = avviaSyncAutomatica(db, supabase, utente.id)
+            console.log('[Sync] Sync automatica avviata per utente:', utente.id)
+          }
+        } catch (err) {
+          console.error('[Sync] Avvio sync fallito:', err.message)
+        }
+      })
+    }
+
+    return
+  }
+
+  win.loadFile(INDEX_HTML_PATH, { hash: 'login' })
+}
+
 // ── App ready ──────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
+  registerDeepLinkProtocol()
+
   // 1. Inizializza database (createTables viene chiamato internamente da getDb)
   const db = getDb()
   console.log('[DB] Database pronto:', db.name || 'ristorante.db')
@@ -190,55 +322,21 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', (_e, level, msg) => {
     if (level >= 2) console.log(`[Renderer] ${msg}`)
   })
-  // 4. Login temporaneamente in pausa: apre direttamente la shell app.
-  if (AUTH_PAUSED) {
-    win.loadFile(INDEX_HTML_PATH)
-  } else {
-    // 4. Controlla la sessione salvata â†’ app o schermata login
-    let sessioneValida = false
-    try {
-      sessioneValida = await controllaSessione()
-    } catch (err) {
-      console.error('[Auth] Errore controllo sessione:', err.message)
-    }
-
-    if (sessioneValida) {
-      try {
-        const utente = getUtenteCorrente()
-        if (utente?.id) {
-          const risultatoImport = await dbManager.sincronizzaDaSupabase(utente.id)
-          if (risultatoImport.processed > 0) {
-            console.log('[DB] Dati Supabase importati in locale:', risultatoImport)
-          }
-        }
-      } catch (err) {
-        console.error('[DB] Import remoto->locale fallito:', err?.message || err)
-      }
-
-      win.loadFile(INDEX_HTML_PATH)
-
-      // 5. Avvia sync automatica dopo il caricamento (solo se Supabase Ã¨ configurato)
-      if (avviaSyncAutomatica && supabase) {
-        win.webContents.once('did-finish-load', () => {
-          try {
-            const utente = getUtenteCorrente()
-            if (utente?.id) {
-              syncIntervalId = avviaSyncAutomatica(db, supabase, utente.id)
-              console.log('[Sync] Sync automatica avviata per utente:', utente.id)
-            }
-          } catch (err) {
-            console.error('[Sync] Avvio sync fallito:', err.message)
-          }
-        })
-      }
-    } else {
-      // Carica index.html con hash #login: il renderer gestirÃ  la schermata di login
-      win.loadFile(INDEX_HTML_PATH, { hash: 'login' })
-    }
-  }
+  await loadInitialWindowContent(win, db)
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length !== 0) {
+      focusMainWindow()
+      return
+    }
+
+    const nextWindow = createWindow()
+    nextWindow.webContents.on('console-message', (_e, level, msg) => {
+      if (level >= 2) console.log(`[Renderer] ${msg}`)
+    })
+    loadInitialWindowContent(nextWindow, getDb()).catch((err) => {
+      console.error('[Main] Errore caricamento finestra attiva:', err?.message || err)
+    })
   })
 })
 

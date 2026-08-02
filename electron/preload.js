@@ -4,6 +4,18 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 console.log('[Preload] Esposizione API via contextBridge attivata.')
 
+const passwordRecoveryLinkQueue = []
+const passwordRecoveryListeners = new Set()
+
+ipcRenderer.on('auth:password-recovery-link', (_event, recoveryUrl) => {
+  if (!recoveryUrl) return
+
+  passwordRecoveryLinkQueue.push(recoveryUrl)
+  for (const listener of passwordRecoveryListeners) {
+    listener(recoveryUrl)
+  }
+})
+
 // Invoca un canale IPC passando gli argomenti direttamente.
 // Gli errori lanciati nel main process vengono propagati come rejection.
 function call(channel, ...args) {
@@ -21,9 +33,26 @@ contextBridge.exposeInMainWorld('api', {
     registrati:        (email, password) => call('ipc-registrati', email, password),
     logout:            ()                => call('ipc-logout'),
     recuperaPassword:  (email)           => call('ipc-recupera-password', email),
+    preparePasswordReset:  (recoveryUrl) => call('ipc-prepare-password-reset', recoveryUrl),
+    completePasswordReset: (newPassword) => call('ipc-complete-password-reset', newPassword),
+    cancelPasswordReset:   ()            => call('ipc-cancel-password-reset'),
     getUtenteCorrente: ()                => call('ipc-utente-corrente'),
     controllaSessione: ()                => call('ipc-controlla-sessione'),
     updateProfile:     (profileData)     => call('ipc-update-profile', profileData),
+    onPasswordRecoveryLink: (callback) => {
+      if (typeof callback !== 'function') {
+        throw new TypeError('onPasswordRecoveryLink richiede una callback valida.')
+      }
+
+      passwordRecoveryListeners.add(callback)
+      while (passwordRecoveryLinkQueue.length > 0) {
+        callback(passwordRecoveryLinkQueue.shift())
+      }
+
+      return () => {
+        passwordRecoveryListeners.delete(callback)
+      }
+    },
   },
 
   // ── MAGAZZINO ─────────────────────────────────────────────────────────────

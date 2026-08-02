@@ -16,7 +16,15 @@ require.cache[electronPath] = {
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 
-const { getPasswordRecoveryErrorMessage, normalizeLoginIdentifier, recuperaPassword } = require('./auth')
+const {
+  getPasswordRecoveryErrorMessage,
+  getPasswordRecoveryLinkErrorMessage,
+  getPasswordResetSessionErrorMessage,
+  getPasswordUpdateErrorMessage,
+  normalizeLoginIdentifier,
+  parsePasswordRecoveryLink,
+  recuperaPassword,
+} = require('./auth')
 
 test('mappa errori di rete a un messaggio utente chiaro', () => {
   const message = getPasswordRecoveryErrorMessage(new Error('fetch failed'))
@@ -77,4 +85,28 @@ test('normalizza un indirizzo email come identificatore di accesso', () => {
 test('preserva un messaggio generico quando non è riconosciuto', () => {
   const message = getPasswordRecoveryErrorMessage({ status: 400, message: 'User not found' })
   assert.equal(message, 'User not found')
+})
+
+test('legge i token di recovery dal deep link Supabase per Electron', () => {
+  const result = parsePasswordRecoveryLink('ristorantepro://reset-password#access_token=token123&refresh_token=refresh456&type=recovery')
+  assert.equal(result.protocol, 'ristorantepro:')
+  assert.equal(result.accessToken, 'token123')
+  assert.equal(result.refreshToken, 'refresh456')
+  assert.equal(result.type, 'recovery')
+})
+
+test('decodifica errori di recovery presenti nel deep link', () => {
+  const linkData = parsePasswordRecoveryLink('ristorantepro://reset-password#error=access_denied&error_description=Link+expired')
+  const message = getPasswordRecoveryLinkErrorMessage(linkData)
+  assert.match(message, /scaduto/i)
+})
+
+test('mappa sessioni di reset non valide a un messaggio chiaro', () => {
+  const message = getPasswordResetSessionErrorMessage({ status: 401, message: 'Invalid Refresh Token: Already Used' })
+  assert.match(message, /sessione di reset password/i)
+})
+
+test('mappa password deboli a un messaggio chiaro', () => {
+  const message = getPasswordUpdateErrorMessage({ message: 'Password should be at least 6 characters' })
+  assert.match(message, /troppo debole/i)
 })

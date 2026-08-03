@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informativa sulla Privacy — Ristorante Pro</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 780px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #222; }
+  h1 { font-size: 1.6em; }
+  h2 { font-size: 1.2em; margin-top: 2em; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+  .updated { color: #666; font-size: 0.9em; margin-bottom: 2em; }
+  ul { padding-left: 1.4em; }
+</style>
+</head>
+<body>
+
+<h1>Informativa sulla Privacy — Ristorante Pro</h1>
+<p class="updated">Ultimo aggiornamento: 3 agosto 2026</p>
+
+<p>Ristorante Pro ("l'App") è un'applicazione desktop per la gestione di ristoranti (menu, magazzino, ricette, ordini fornitori, personale, food cost). Questa informativa descrive quali dati vengono trattati e come.</p>
+
+<h2>1. Titolare del trattamento</h2>
+<p>Erenis — contatto: <a href="mailto:cjapierenis00@gmail.com">cjapierenis00@gmail.com</a></p>
+
+<h2>2. Dati trattati</h2>
+<p>L'App salva localmente sul dispositivo dell'utente, in un database SQLite, i dati inseriti volontariamente dal gestore del locale per l'uso dell'applicazione, tra cui:</p>
+<ul>
+  <li>credenziali di accesso (email e password, salvata in forma cifrata con scrypt e salt se si usa l'account locale)</li>
+  <li>dati operativi del ristorante: menu, ricette, ingredienti, magazzino, ordini fornitori, turni e anagrafica del personale</li>
+</ul>
+<p>Questi dati riguardano l'attività del ristorante e il suo personale, non i clienti finali del ristorante: l'App non raccoglie dati di clienti/avventori.</p>
+
+<h2>3. Sincronizzazione cloud (opzionale)</h2>
+<p>Se l'utente attiva la sincronizzazione cloud, i dati sopra descritti vengono trasmessi in modo cifrato (HTTPS) e salvati su Supabase, il fornitore di backend-as-a-service usato come sub-responsabile del trattamento. Se la sincronizzazione non è configurata o è offline, l'App funziona interamente in locale e nessun dato lascia il dispositivo.</p>
+
+<h2>4. Finalità del trattamento</h2>
+<ul>
+  <li>fornire le funzionalità dell'App (gestione menu, magazzino, ricette, ordini, personale, food cost)</li>
+  <li>autenticazione e gestione della sessione utente</li>
+  <li>backup e sincronizzazione dei dati tra più dispositivi (solo se attivata dall'utente)</li>
+</ul>
+
+<h2>5. Dati non raccolti</h2>
+<p>L'App non include pubblicità, non utilizza strumenti di tracciamento o analytics di terze parti e non vende né condivide dati con terzi a scopo commerciale.</p>
+
+<h2>6. Conservazione e cancellazione</h2>
+<p>I dati locali restano sul dispositivo fino a disinstallazione dell'App o cancellazione manuale. I dati sincronizzati su Supabase vengono conservati finché l'account resta attivo; l'utente può richiederne la cancellazione contattando il titolare all'indirizzo indicato al punto 1.</p>
+
+<h2>7. Sicurezza</h2>
+<p>Le password degli account locali sono salvate con hashing scrypt e confronto a tempo costante. Le comunicazioni con il servizio cloud (se attivo) avvengono via HTTPS.</p>
+
+<h2>8. Diritti dell'utente</h2>
+<p>L'utente può richiedere in qualsiasi momento accesso, correzione o cancellazione dei propri dati scrivendo a <a href="mailto:cjapierenis00@gmail.com">cjapierenis00@gmail.com</a>.</p>
+
+<h2>9. Modifiche a questa informativa</h2>
+<p>Questa informativa può essere aggiornata in futuro; la data di ultimo aggiornamento è indicata in cima alla pagina.</p>
+
+</body>
+</html>

@@ -116,6 +116,27 @@ test('leggi(): include le righe condivise con user_id IS NULL', () => {
 	assert.ok(perA.some(r => r.id === condiviso.lastInsertRowid))
 })
 
+test('leggi() permette di selezionare un sottoinsieme di colonne', () => {
+	dbManager.salvaLocale('ingredienti', { nome: 'Solo colonne', scorta: 4, categoria: 'Test' }, USER_A)
+
+	const rows = dbManager.leggi('ingredienti', USER_A, ['id', 'nome'])
+	assert.ok(rows.length > 0)
+	assert.deepEqual(Object.keys(rows[0]).sort(), ['id', 'nome'])
+})
+
+test('leggi()/leggiPerId() rifiutano nomi colonna non validi', () => {
+	dbManager.salvaLocale('ingredienti', { nome: 'Validazione colonne' }, USER_A)
+
+	assert.throws(
+		() => dbManager.leggi('ingredienti', USER_A, ['id', 'nome;DROP TABLE ingredienti;--']),
+		/Nome colonna non valido/
+	)
+	assert.throws(
+		() => dbManager.leggiPerId('ingredienti', 1, USER_A, ['id', 'nome--']),
+		/Nome colonna non valido/
+	)
+})
+
 test('eliminaLocale(): rimuove un record di proprietà e lo accoda come delete', () => {
 	const creato = dbManager.salvaLocale('ingredienti', { nome: 'Da eliminare' }, USER_A).data
 	const risultato = dbManager.eliminaLocale('ingredienti', creato.id, USER_A)
@@ -127,6 +148,31 @@ test('eliminaLocale(): rimuove un record di proprietà e lo accoda come delete',
 		.prepare(`SELECT * FROM coda_sync WHERE entita = 'ingredienti' AND record_id = ? ORDER BY id DESC LIMIT 1`)
 		.get(String(creato.id))
 	assert.equal(coda.azione, 'delete')
+})
+
+test('coda_sync: coalesce mantiene una sola riga pending per record', () => {
+	const creato = dbManager.salvaLocale('ingredienti', { nome: 'Coalesce coda', scorta: 1 }, USER_A).data
+	dbManager.salvaLocale('ingredienti', { id: creato.id, scorta: 2 }, USER_A)
+	dbManager.eliminaLocale('ingredienti', creato.id, USER_A)
+
+	const rows = dbManager.getDb()
+		.prepare(`SELECT azione FROM coda_sync WHERE entita = 'ingredienti' AND record_id = ? AND user_id = ? AND sincronizzato = 0`)
+		.all(String(creato.id), USER_A)
+
+	assert.equal(rows.length, 1)
+	assert.equal(rows[0].azione, 'delete')
+})
+
+test('accodaSyncLocale aggiorna payload pending esistente', () => {
+	dbManager.accodaSyncLocale('ingredienti', 'manual-1', { id: 'manual-1', nome: 'Prima' }, USER_A, 'upsert')
+	dbManager.accodaSyncLocale('ingredienti', 'manual-1', { id: 'manual-1', nome: 'Seconda' }, USER_A, 'upsert')
+
+	const rows = dbManager.getDb()
+		.prepare(`SELECT payload FROM coda_sync WHERE entita = 'ingredienti' AND record_id = ? AND user_id = ? AND sincronizzato = 0`)
+		.all('manual-1', USER_A)
+
+	assert.equal(rows.length, 1)
+	assert.equal(JSON.parse(rows[0].payload).nome, 'Seconda')
 })
 
 test('eliminaLocale(): non elimina (e segnala notFound) un record di un altro utente', () => {

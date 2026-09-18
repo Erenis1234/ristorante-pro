@@ -14,6 +14,9 @@
   }
 
   let paginaAttuale = null
+  const CONN_POLL_ACTIVE_MS = 30 * 1000
+  const CONN_POLL_IDLE_MS = 2 * 60 * 1000
+  let connPollTimer = null
 
   function getAuthApiOrThrow(context) {
     const authApi = window.api && window.api.auth
@@ -67,16 +70,28 @@
     window.addEventListener('app:login-success', () => {
       void sincronizzaUiSessione(true)
       setTimeout(() => caricaPagina('dashboard'), 100)
+      startConnectionPolling(true)
     })
 
     window.addEventListener('app:auth-screen-visible', () => {
       chiudiMenuProfilo()
       chiudiSidebarMobile()
+      startConnectionPolling(false)
     })
 
-    // Check connection status every 5 seconds
-    aggiornaPinged()
-    setInterval(aggiornaPinged, 5000)
+    startConnectionPolling(true)
+    document.addEventListener('visibilitychange', () => {
+      startConnectionPolling(!document.hidden)
+    })
+    window.addEventListener('focus', () => {
+      void aggiornaPinged(true)
+    })
+    window.addEventListener('online', () => {
+      startConnectionPolling(true)
+    })
+    window.addEventListener('offline', () => {
+      void aggiornaPinged(true)
+    })
 
     // Sync manuale
     const btnSync = document.getElementById('btn-sync')
@@ -291,7 +306,37 @@
   }
 
   // ── Aggiorna stato connessione ───────────────────────────────────
-  async function aggiornaPinged() {
+  function getConnectionPollInterval() {
+    const onAuthScreen = window.location.hash === '#login' || window.location.hash === '#reset-password'
+    return document.hidden || onAuthScreen ? CONN_POLL_IDLE_MS : CONN_POLL_ACTIVE_MS
+  }
+
+  function stopConnectionPolling() {
+    if (!connPollTimer) return
+    clearInterval(connPollTimer)
+    connPollTimer = null
+  }
+
+  function startConnectionPolling(runImmediately) {
+    stopConnectionPolling()
+
+    if (runImmediately) {
+      void aggiornaPinged(true)
+    }
+
+    connPollTimer = setInterval(() => {
+      void aggiornaPinged(false)
+    }, getConnectionPollInterval())
+  }
+
+  async function aggiornaPinged(force) {
+    if (!force) {
+      const onAuthScreen = window.location.hash === '#login' || window.location.hash === '#reset-password'
+      if (document.hidden || onAuthScreen) {
+        return
+      }
+    }
+
     const connIndicator = document.getElementById('conn-indicator')
     const connDot = document.getElementById('conn-dot')
     const dbStatus = document.getElementById('db-status')

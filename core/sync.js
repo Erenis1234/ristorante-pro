@@ -3,6 +3,16 @@ const path = require('path')
 
 const SYNC_INTERVAL_MS = 30 * 1000
 const DEFAULT_TIMEOUT_MS = 3500
+const CONNECTION_CACHE_TTL_MS = 5000
+const DNS_DIAGNOSTIC_COOLDOWN_MS = 5 * 60 * 1000
+
+let connectionStatusCache = {
+	client: null,
+	timeoutMs: DEFAULT_TIMEOUT_MS,
+	checkedAt: 0,
+	result: false,
+}
+let lastDnsDiagnosticAt = 0
 
 function logSupabaseBootstrapDiagnostic(context, reason) {
 	const stack = new Error(reason).stack || ''
@@ -44,10 +54,25 @@ function ensureValidTableName(tabella) {
 }
 
 async function controllaConnessione(supabaseClient = null, timeoutMs = DEFAULT_TIMEOUT_MS) {
+	const now = Date.now()
+	if (
+		connectionStatusCache.client === supabaseClient
+		&& connectionStatusCache.timeoutMs === timeoutMs
+		&& now - connectionStatusCache.checkedAt < CONNECTION_CACHE_TTL_MS
+	) {
+		return connectionStatusCache.result
+	}
+
 	if (!supabaseClient) {
 		const diagnostic = formatSupabaseDiagnostic('controllaConnessione', new Error('Client Supabase non disponibile'))
 		logSupabaseDiagnostic('controllaConnessione', diagnostic)
 		console.warn('[Sync] Controllo connessione fallito: client Supabase non disponibile.')
+		connectionStatusCache = {
+			client: supabaseClient,
+			timeoutMs,
+			checkedAt: now,
+			result: false,
+		}
 		return false
 	}
 
@@ -55,6 +80,12 @@ async function controllaConnessione(supabaseClient = null, timeoutMs = DEFAULT_T
 		const diagnostic = formatSupabaseDiagnostic('controllaConnessione', new Error('Client Supabase senza auth.getSession'))
 		logSupabaseDiagnostic('controllaConnessione', diagnostic)
 		console.warn('[Sync] Controllo connessione fallito: client Supabase senza auth.getSession.')
+		connectionStatusCache = {
+			client: supabaseClient,
+			timeoutMs,
+			checkedAt: now,
+			result: false,
+		}
 		return false
 	}
 
@@ -67,24 +98,45 @@ async function controllaConnessione(supabaseClient = null, timeoutMs = DEFAULT_T
 		if (sessionResult?.error) {
 			const diagnostic = formatSupabaseDiagnostic('auth.getSession', sessionResult.error)
 			logSupabaseDiagnostic('auth.getSession', diagnostic)
+			connectionStatusCache = {
+				client: supabaseClient,
+				timeoutMs,
+				checkedAt: now,
+				result: false,
+			}
 			return false
 		}
 
 		console.log('[Sync] Controllo connessione Supabase OK. Sessione:', sessionResult?.data?.session ? 'presente' : 'assente')
+		connectionStatusCache = {
+			client: supabaseClient,
+			timeoutMs,
+			checkedAt: now,
+			result: true,
+		}
 		return true
 	} catch (error) {
 		const diagnostic = formatSupabaseDiagnostic('auth.getSession', error)
 		logSupabaseDiagnostic('auth.getSession', diagnostic)
 
-		try {
-			await dns.lookup('google.com')
-			console.log('[Sync] DNS lookup OK, ma il check Supabase è fallito.')
-		} catch (_dnsError) {
-			const dnsDiagnostic = formatSupabaseDiagnostic('dns.lookup', _dnsError)
-			logSupabaseDiagnostic('dns.lookup', dnsDiagnostic)
-			console.warn('[Sync] DNS lookup fallito:', _dnsError?.message || _dnsError)
+		if (now - lastDnsDiagnosticAt >= DNS_DIAGNOSTIC_COOLDOWN_MS) {
+			lastDnsDiagnosticAt = now
+			try {
+				await dns.lookup('google.com')
+				console.log('[Sync] DNS lookup OK, ma il check Supabase è fallito.')
+			} catch (_dnsError) {
+				const dnsDiagnostic = formatSupabaseDiagnostic('dns.lookup', _dnsError)
+				logSupabaseDiagnostic('dns.lookup', dnsDiagnostic)
+				console.warn('[Sync] DNS lookup fallito:', _dnsError?.message || _dnsError)
+			}
 		}
 
+		connectionStatusCache = {
+			client: supabaseClient,
+			timeoutMs,
+			checkedAt: now,
+			result: false,
+		}
 		return false
 	}
 }

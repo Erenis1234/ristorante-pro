@@ -43,8 +43,46 @@ function getRecipeIngredients(db, ricettaId, userId) {
 		}))
 }
 
-function buildRicettaDettaglio(db, ricetta, userId) {
-	const ingredienti = getRecipeIngredients(db, ricetta.id, userId)
+function getRecipeIngredientsBatch(db, ricettaIds, userId) {
+	if (!Array.isArray(ricettaIds) || ricettaIds.length === 0) {
+		return new Map()
+	}
+
+	const placeholders = ricettaIds.map(() => '?').join(', ')
+	const rows = db.prepare(`
+		SELECT
+			ri.id,
+			ri.ricetta_id,
+			ri.ingrediente_id,
+			ri.nome,
+			ri.quantita,
+			ri.unita_misura,
+			ri.note,
+			ri.user_id
+		FROM ricetta_ingredienti ri
+		WHERE ri.user_id = ? AND ri.ricetta_id IN (${placeholders})
+		ORDER BY ri.ricetta_id ASC, ri.nome ASC
+	`).all(userId, ...ricettaIds)
+
+	const map = new Map()
+	for (const row of rows) {
+		const ricettaId = row.ricetta_id
+		if (!map.has(ricettaId)) {
+			map.set(ricettaId, [])
+		}
+		map.get(ricettaId).push({
+			...row,
+			costo: 0,
+		})
+	}
+
+	return map
+}
+
+function buildRicettaDettaglio(db, ricetta, userId, ingredientiMap = null) {
+	const ingredienti = ingredientiMap
+		? (ingredientiMap.get(ricetta.id) || [])
+		: getRecipeIngredients(db, ricetta.id, userId)
 
 	return {
 		id: ricetta.id,
@@ -68,9 +106,46 @@ function saveRecipeIngredients(db, ricettaId, ingredienti, userId) {
 			'SELECT id FROM ricetta_ingredienti WHERE ricetta_id = ? AND user_id = ?'
 		).all(ricettaId, userId)
 
+		db.prepare(
+			'DELETE FROM ricetta_ingredienti WHERE ricetta_id = ? AND user_id = ?'
+		).run(ricettaId, userId)
+
 		for (const row of currentRows) {
-			dbManager.eliminaLocale('ricetta_ingredienti', row.id, userId)
+			dbManager.accodaSyncLocale(
+				'ricetta_ingredienti',
+				row.id,
+				{ id: row.id, user_id: userId },
+				userId,
+				'delete'
+			)
 		}
+
+		const insertStmt = db.prepare(`
+			INSERT INTO ricetta_ingredienti (
+				ricetta_id,
+				ingrediente_id,
+				nome,
+				quantita,
+				unita_misura,
+				note,
+				user_id,
+				updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+		`)
+		const getInsertedStmt = db.prepare(`
+			SELECT
+				id,
+				ricetta_id,
+				ingrediente_id,
+				nome,
+				quantita,
+				unita_misura,
+				note,
+				user_id,
+				updated_at
+			FROM ricetta_ingredienti
+			WHERE id = ? AND user_id = ?
+		`)
 
 		for (const ingrediente of ingredienti) {
 			const nome = String(
@@ -78,14 +153,24 @@ function saveRecipeIngredients(db, ricettaId, ingredienti, userId) {
 			).trim()
 			if (!nome) continue
 
-			dbManager.salvaLocale('ricetta_ingredienti', {
-				ricetta_id: ricettaId,
-				ingrediente_id: null,
+			const inserted = insertStmt.run(
+				ricettaId,
+				null,
 				nome,
-				quantita: ingrediente.quantita,
-				unita_misura: ingrediente.unita_misura || 'g',
-				note: ingrediente.note || null,
-			}, userId)
+				ingrediente.quantita,
+				ingrediente.unita_misura || 'g',
+				ingrediente.note || null,
+				userId
+			)
+
+			const localRecord = getInsertedStmt.get(inserted.lastInsertRowid, userId)
+			dbManager.accodaSyncLocale(
+				'ricetta_ingredienti',
+				localRecord.id,
+				localRecord,
+				userId,
+				'upsert'
+			)
 		}
 	})()
 }
@@ -93,11 +178,27 @@ function saveRecipeIngredients(db, ricettaId, ingredienti, userId) {
 async function getRicette() {
 	const userId = getUserIdOrThrow()
 	const db = dbManager.getDb()
-	const ricette = dbManager.leggi('ricette', userId)
+	const ricette = dbManager.leggi('ricette', userId, [
+		'id',
+		'nome',
+		'porzioni',
+		'tempo_preparazione',
+		'temperatura',
+		'categoria',
+		'foto',
+		'prezzo_vendita',
+		'user_id',
+		'updated_at',
+	])
+	const ingredientiByRicettaId = getRecipeIngredientsBatch(
+		db,
+		ricette.map(ricetta => ricetta.id),
+		userId
+	)
 
 	return ricette.map(ricetta => ({
 		...ricetta,
-		ingredienti: getRecipeIngredients(db, ricetta.id, userId),
+		ingredienti: ingredientiByRicettaId.get(ricetta.id) || [],
 	}))
 }
 
@@ -152,9 +253,20 @@ async function deleteRicetta(id) {
 		'SELECT id FROM ricetta_ingredienti WHERE ricetta_id = ? AND user_id = ?'
 	).all(id, userId)
 
-	for (const riga of righe) {
-		await dbManager.elimina('ricetta_ingredienti', riga.id, userId)
-	}
+	db.transaction(() => {
+		db.prepare('DELETE FROM ricetta_ingredienti WHERE ricetta_id = ? AND user_id = ?')
+			.run(id, userId)
+
+		for (const riga of righe) {
+			dbManager.accodaSyncLocale(
+				'ricetta_ingredienti',
+				riga.id,
+				{ id: riga.id, user_id: userId },
+				userId,
+				'delete'
+			)
+		}
+	})()
 
 	return dbManager.elimina('ricette', id, userId)
 }

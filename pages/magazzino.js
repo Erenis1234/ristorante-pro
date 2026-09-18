@@ -33,6 +33,8 @@ var state = {
 		},
 	},
 }
+var SEARCH_DEBOUNCE_MS = 180
+var searchRerenderTimeoutId = null
 
 function escapeHtml(value) {
 	return String(value ?? '')
@@ -413,6 +415,16 @@ function rerender() {
 	state.container.innerHTML = render()
 }
 
+function scheduleSearchRerender() {
+	if (searchRerenderTimeoutId) {
+		clearTimeout(searchRerenderTimeoutId)
+	}
+	searchRerenderTimeoutId = setTimeout(function () {
+		searchRerenderTimeoutId = null
+		rerender()
+	}, SEARCH_DEBOUNCE_MS)
+}
+
 function openIngredienteModalForCreate() {
 	state.ingredienteModal.open = true
 	state.ingredienteModal.mode = 'create'
@@ -655,7 +667,7 @@ function initEvents(container) {
 		var action = target.getAttribute('data-action')
 		if (action === 'search-ingredienti') {
 			state.searchQuery = target.value || ''
-			rerender()
+			scheduleSearchRerender()
 		}
 	})
 

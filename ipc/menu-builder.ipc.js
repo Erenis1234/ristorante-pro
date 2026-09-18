@@ -34,13 +34,43 @@ function getVociMenu(db, menuId, userId) {
 	`).all(menuId, userId)
 }
 
-function buildMenuDettaglio(db, menu, userId) {
+function getVociMenuBatch(db, menuIds, userId) {
+	if (!Array.isArray(menuIds) || menuIds.length === 0) {
+		return new Map()
+	}
+
+	const placeholders = menuIds.map(() => '?').join(', ')
+	const rows = db.prepare(`
+		SELECT
+			mv.id,
+			mv.menu_id,
+			mv.nome,
+			mv.prezzo,
+			mv.ordine,
+			mv.user_id
+		FROM menu_voci mv
+		WHERE mv.user_id = ? AND mv.menu_id IN (${placeholders})
+		ORDER BY mv.menu_id ASC, mv.ordine ASC, mv.id ASC
+	`).all(userId, ...menuIds)
+
+	const map = new Map()
+	for (const row of rows) {
+		const menuId = row.menu_id
+		if (!map.has(menuId)) {
+			map.set(menuId, [])
+		}
+		map.get(menuId).push(row)
+	}
+	return map
+}
+
+function buildMenuDettaglio(db, menu, userId, vociByMenuId = null) {
 	return {
 		id: menu.id,
 		nome: menu.nome,
 		descrizione: menu.descrizione || null,
 		tipo: menu.tipo === 'settimanale' ? 'settimanale' : 'giornaliero',
-		voci: getVociMenu(db, menu.id, userId),
+		voci: vociByMenuId ? (vociByMenuId.get(menu.id) || []) : getVociMenu(db, menu.id, userId),
 		updated_at: menu.updated_at,
 	}
 }
@@ -56,20 +86,61 @@ function syncVociMenu(menuId, voci, userId) {
 			'SELECT id FROM menu_voci WHERE menu_id = ? AND user_id = ?'
 		).all(menuId, userId)
 
+		db.prepare('DELETE FROM menu_voci WHERE menu_id = ? AND user_id = ?')
+			.run(menuId, userId)
+
 		for (const voce of esistenti) {
-			dbManager.eliminaLocale('menu_voci', voce.id, userId)
+			dbManager.accodaSyncLocale(
+				'menu_voci',
+				voce.id,
+				{ id: voce.id, user_id: userId },
+				userId,
+				'delete'
+			)
 		}
+
+		const insertStmt = db.prepare(`
+			INSERT INTO menu_voci (
+				menu_id,
+				nome,
+				prezzo,
+				ordine,
+				user_id,
+				updated_at
+			) VALUES (?, ?, ?, ?, ?, datetime('now'))
+		`)
+		const getInsertedStmt = db.prepare(`
+			SELECT
+				id,
+				menu_id,
+				nome,
+				prezzo,
+				ordine,
+				user_id,
+				updated_at
+			FROM menu_voci
+			WHERE id = ? AND user_id = ?
+		`)
 
 		voci.forEach((voce, index) => {
 			const nome = String(voce?.nome || '').trim()
 			if (!nome) return
 
-			dbManager.salvaLocale('menu_voci', {
-				menu_id: menuId,
+			const inserted = insertStmt.run(
+				menuId,
 				nome,
-				prezzo: Number(voce.prezzo ?? 0),
-				ordine: Number.isFinite(Number(voce.ordine)) ? Number(voce.ordine) : index,
-			}, userId)
+				Number(voce.prezzo ?? 0),
+				Number.isFinite(Number(voce.ordine)) ? Number(voce.ordine) : index,
+				userId
+			)
+			const localRecord = getInsertedStmt.get(inserted.lastInsertRowid, userId)
+			dbManager.accodaSyncLocale(
+				'menu_voci',
+				localRecord.id,
+				localRecord,
+				userId,
+				'upsert'
+			)
 		})
 	})()
 }
@@ -77,9 +148,21 @@ function syncVociMenu(menuId, voci, userId) {
 async function getMenu() {
 	const userId = getUserIdOrThrow()
 	const db = dbManager.getDb()
-	const menuRows = dbManager.leggi('menu', userId)
+	const menuRows = dbManager.leggi('menu', userId, [
+		'id',
+		'nome',
+		'descrizione',
+		'tipo',
+		'user_id',
+		'updated_at',
+	])
+	const vociByMenuId = getVociMenuBatch(
+		db,
+		menuRows.map(menu => menu.id),
+		userId
+	)
 
-	return menuRows.map(menu => buildMenuDettaglio(db, menu, userId))
+	return menuRows.map(menu => buildMenuDettaglio(db, menu, userId, vociByMenuId))
 }
 
 async function addMenu(dati) {
@@ -127,9 +210,19 @@ async function deleteMenu(id) {
 		'SELECT id FROM menu_voci WHERE menu_id = ? AND user_id = ?'
 	).all(id, userId)
 
-	for (const voce of voci) {
-		await dbManager.elimina('menu_voci', voce.id, userId)
-	}
+	db.transaction(() => {
+		db.prepare('DELETE FROM menu_voci WHERE menu_id = ? AND user_id = ?')
+			.run(id, userId)
+		for (const voce of voci) {
+			dbManager.accodaSyncLocale(
+				'menu_voci',
+				voce.id,
+				{ id: voce.id, user_id: userId },
+				userId,
+				'delete'
+			)
+		}
+	})()
 
 	return dbManager.elimina('menu', id, userId)
 }

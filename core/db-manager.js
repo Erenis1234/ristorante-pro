@@ -55,6 +55,28 @@ function ensureValidTableName(tabella) {
 	}
 }
 
+function ensureValidSelectColumns(columns) {
+	if (!Array.isArray(columns) || columns.length === 0) {
+		return '*'
+	}
+
+	const normalized = columns
+		.map(column => String(column || '').trim())
+		.filter(Boolean)
+
+	if (!normalized.length) {
+		return '*'
+	}
+
+	for (const column of normalized) {
+		if (!/^[a-z_][a-z0-9_]*$/i.test(column)) {
+			throw new Error(`Nome colonna non valido: ${column}`)
+		}
+	}
+
+	return normalized.join(', ')
+}
+
 function isMissingRemoteTableError(error) {
 	const message = error?.message || String(error || '')
 	return /could not find the table|relation .* does not exist|schema cache|42p01|pgrst205|does not exist/i.test(message)
@@ -209,12 +231,54 @@ function upsertSQLite(database, tabella, dati, userId, targetUserId = userId) {
 		.get(result.lastInsertRowid, targetUserId)
 }
 
-function enqueueSync(database, tabella, recordId, payload, userId, errorMessage = null) {
-	database.prepare(
+function enqueueSync(database, tabella, recordId, payload, userId, action = 'upsert', errorMessage = null) {
+	const normalizedRecordId = String(recordId || '')
+	const serializedPayload = payload === undefined ? null : JSON.stringify(payload)
+
+	const existing = database.prepare(
+		`SELECT id
+		 FROM coda_sync
+		 WHERE entita = ? AND record_id = ? AND user_id = ? AND sincronizzato = 0
+		 ORDER BY id DESC
+		 LIMIT 1`
+	).get(tabella, normalizedRecordId, userId)
+
+	if (existing?.id) {
+		database.prepare(
+			`UPDATE coda_sync
+			 SET azione = ?,
+			     payload = ?,
+			     stato = 'pending',
+			     tentativi = 0,
+			     ultimo_errore = ?,
+			     updated_at = datetime('now')
+			 WHERE id = ?`
+		).run(action, serializedPayload, errorMessage, existing.id)
+		return existing.id
+	}
+
+	const result = database.prepare(
 		`INSERT INTO coda_sync (
 			 entita, record_id, azione, payload, sincronizzato, stato, tentativi, ultimo_errore, user_id, updated_at
-		 ) VALUES (?, ?, 'upsert', ?, 0, 'pending', 0, ?, ?, datetime('now'))`
-	).run(tabella, String(recordId || ''), JSON.stringify(payload), errorMessage, userId)
+		 ) VALUES (?, ?, ?, ?, 0, 'pending', 0, ?, ?, datetime('now'))`
+	).run(tabella, normalizedRecordId, action, serializedPayload, errorMessage, userId)
+
+	return result.lastInsertRowid
+}
+
+function accodaSyncLocale(tabella, recordId, payload, userId, action = 'upsert', errorMessage = null) {
+	ensureValidTableName(tabella)
+
+	if (!userId) {
+		throw new Error('userId obbligatorio per la coda di sincronizzazione')
+	}
+
+	const database = getDb()
+	enqueueSync(database, tabella, recordId, payload, userId, action, errorMessage)
+
+	return {
+		queued: true,
+	}
 }
 
 async function salva(tabella, dati, userId) {
@@ -235,7 +299,7 @@ async function salva(tabella, dati, userId) {
 
 	const backendMode = await getActiveBackend()
 	if (backendMode !== 'remote' || !supabase) {
-		enqueueSync(database, tabella, localRecord.id, remotePayload, userId)
+		enqueueSync(database, tabella, localRecord.id, remotePayload, userId, 'upsert')
 		return {
 			data: localRecord,
 			synced: false,
@@ -248,7 +312,7 @@ async function salva(tabella, dati, userId) {
 		const { error } = await supabase.from(tabella).upsert(remotePayload)
 
 		if (error) {
-			enqueueSync(database, tabella, localRecord.id, remotePayload, userId, error.message)
+			enqueueSync(database, tabella, localRecord.id, remotePayload, userId, 'upsert', error.message)
 			return {
 				data: localRecord,
 				synced: false,
@@ -265,7 +329,7 @@ async function salva(tabella, dati, userId) {
 			backend: 'remote',
 		}
 	} catch (error) {
-		enqueueSync(database, tabella, localRecord.id, remotePayload, userId, error.message)
+		enqueueSync(database, tabella, localRecord.id, remotePayload, userId, 'upsert', error.message)
 		return {
 			data: localRecord,
 			synced: false,
@@ -276,29 +340,33 @@ async function salva(tabella, dati, userId) {
 	}
 }
 
-function leggi(tabella, userId) {
+function leggi(tabella, userId, columns = null) {
 	ensureValidTableName(tabella)
 
 	if (!userId) {
 		throw new Error('userId obbligatorio per la lettura')
 	}
 
+	const selectColumns = ensureValidSelectColumns(columns)
+
 	return getDb()
-		.prepare(`SELECT * FROM ${tabella} 
+		.prepare(`SELECT ${selectColumns} FROM ${tabella} 
 					WHERE user_id = ? OR user_id IS NULL 
 					ORDER BY updated_at DESC, id DESC`)
 		.all(userId)
 }
 
-function leggiPerId(tabella, id, userId) {
+function leggiPerId(tabella, id, userId, columns = null) {
 	ensureValidTableName(tabella)
 
 	if (!userId) {
 		throw new Error('userId obbligatorio per la lettura')
 	}
 
+	const selectColumns = ensureValidSelectColumns(columns)
+
 	return getDb()
-		.prepare(`SELECT * FROM ${tabella} 
+		.prepare(`SELECT ${selectColumns} FROM ${tabella} 
 					WHERE id = ? AND (user_id = ? OR user_id IS NULL)`)
 		.get(id, userId) || null
 }
@@ -323,7 +391,7 @@ function salvaLocale(tabella, dati, userId) {
 	enqueueSync(database, tabella, localRecord.id, {
 		...localRecord,
 		user_id: userId,
-	}, userId)
+	}, userId, 'upsert')
 
 	return {
 		data: localRecord,
@@ -350,10 +418,7 @@ function eliminaLocale(tabella, id, userId) {
 	}
 
 	database.prepare(`DELETE FROM ${tabella} WHERE id = ? AND user_id = ?`).run(id, userId)
-	enqueueSync(database, tabella, id, { id, user_id: userId }, userId)
-	database.prepare(
-		`UPDATE coda_sync SET azione = 'delete' WHERE id = last_insert_rowid()`
-	).run()
+	enqueueSync(database, tabella, id, { id, user_id: userId }, userId, 'delete')
 
 	return {
 		deleted: true,
@@ -383,10 +448,7 @@ async function elimina(tabella, id, userId) {
 
 	const backendMode = await getActiveBackend()
 	if (backendMode !== 'remote' || !supabase) {
-		enqueueSync(database, tabella, id, { id, user_id: userId }, userId)
-		database.prepare(
-			`UPDATE coda_sync SET azione = 'delete' WHERE id = last_insert_rowid()`
-		).run()
+		enqueueSync(database, tabella, id, { id, user_id: userId }, userId, 'delete')
 		return {
 			deleted: true,
 			synced: false,
@@ -399,10 +461,7 @@ async function elimina(tabella, id, userId) {
 		const { error } = await supabase.from(tabella).delete().eq('id', id).eq('user_id', userId)
 
 		if (error) {
-			enqueueSync(database, tabella, id, { id, user_id: userId }, userId, error.message)
-			database.prepare(
-				`UPDATE coda_sync SET azione = 'delete' WHERE id = last_insert_rowid()`
-			).run()
+			enqueueSync(database, tabella, id, { id, user_id: userId }, userId, 'delete', error.message)
 			return {
 				deleted: true,
 				synced: false,
@@ -419,10 +478,7 @@ async function elimina(tabella, id, userId) {
 			backend: 'remote',
 		}
 	} catch (error) {
-		enqueueSync(database, tabella, id, { id, user_id: userId }, userId, error.message)
-		database.prepare(
-			`UPDATE coda_sync SET azione = 'delete' WHERE id = last_insert_rowid()`
-		).run()
+		enqueueSync(database, tabella, id, { id, user_id: userId }, userId, 'delete', error.message)
 		return {
 			deleted: true,
 			synced: false,
@@ -443,4 +499,5 @@ module.exports = {
 	elimina,
 	salvaLocale,
 	eliminaLocale,
+	accodaSyncLocale,
 }

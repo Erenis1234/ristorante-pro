@@ -180,6 +180,7 @@ function createTables(db) {
 	_migrateRicetteCategoriaFoto(db)
 	_migrateMenuTipo(db)
 	_migrateRicettePrezzoVendita(db)
+	_createIndexes(db)
 }
 
 // Aggiunge colonna `tipo` a `menu` per i DB creati prima dell'introduzione del campo
@@ -281,6 +282,35 @@ function _migrateRicettePrezzoVendita(db) {
 	if (!cols.some(c => c.name === 'prezzo_vendita')) {
 		db.exec(`ALTER TABLE ricette ADD COLUMN prezzo_vendita REAL`)
 	}
+}
+
+function _createIndexes(db) {
+	db.exec(`
+		CREATE INDEX IF NOT EXISTS idx_ingredienti_user_updated
+			ON ingredienti(user_id, updated_at DESC, id DESC);
+		CREATE INDEX IF NOT EXISTS idx_ricette_user_updated
+			ON ricette(user_id, updated_at DESC, id DESC);
+		CREATE INDEX IF NOT EXISTS idx_menu_user_updated
+			ON menu(user_id, updated_at DESC, id DESC);
+		CREATE INDEX IF NOT EXISTS idx_personale_user_updated
+			ON personale(user_id, updated_at DESC, id DESC);
+		CREATE INDEX IF NOT EXISTS idx_turni_user_updated
+			ON turni(user_id, updated_at DESC, id DESC);
+		CREATE INDEX IF NOT EXISTS idx_movimenti_magazzino_user_updated
+			ON movimenti_magazzino(user_id, updated_at DESC, id DESC);
+		CREATE INDEX IF NOT EXISTS idx_ordini_fornitori_user_data
+			ON ordini_fornitori(user_id, data_ordine DESC, id DESC);
+		CREATE INDEX IF NOT EXISTS idx_ricetta_ingredienti_ricetta_user_nome
+			ON ricetta_ingredienti(ricetta_id, user_id, nome, id);
+		CREATE INDEX IF NOT EXISTS idx_menu_voci_menu_user_ordine
+			ON menu_voci(menu_id, user_id, ordine, id);
+		CREATE INDEX IF NOT EXISTS idx_ordine_righe_ordine_user_nome
+			ON ordine_fornitore_righe(ordine_id, user_id, ingrediente_nome, id);
+		CREATE INDEX IF NOT EXISTS idx_coda_sync_user_pending
+			ON coda_sync(user_id, sincronizzato, id);
+		CREATE INDEX IF NOT EXISTS idx_coda_sync_entita_record_pending
+			ON coda_sync(entita, record_id, user_id, sincronizzato, id DESC);
+	`)
 }
 
 module.exports = {

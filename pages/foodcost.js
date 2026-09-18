@@ -31,6 +31,8 @@ var state = {
 		record: null,
 	},
 }
+var SIM_RESULT_DEBOUNCE_MS = 120
+var simulatorResultTimeoutId = null
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
@@ -609,6 +611,16 @@ function updateSimResult() {
 	if (slot) slot.innerHTML = renderSimulatorResult()
 }
 
+function scheduleSimResultUpdate() {
+	if (simulatorResultTimeoutId) {
+		clearTimeout(simulatorResultTimeoutId)
+	}
+	simulatorResultTimeoutId = setTimeout(function () {
+		simulatorResultTimeoutId = null
+		updateSimResult()
+	}, SIM_RESULT_DEBOUNCE_MS)
+}
+
 function updateSimulatorBody() {
 	if (!state.container) return
 	var slot = state.container.querySelector('[data-slot="simulator-body"]')
@@ -957,7 +969,7 @@ function initEvents(container) {
 			if (state.simulator.ingredienti[idx]) {
 				state.simulator.ingredienti[idx].costo = target.value
 			}
-			updateSimResult()
+			scheduleSimResultUpdate()
 			return
 		}
 
@@ -968,7 +980,7 @@ function initEvents(container) {
 
 		if (action === 'sim-prezzo-input') {
 			state.simulator.prezzoVendita = target.value
-			updateSimResult()
+			scheduleSimResultUpdate()
 			return
 		}
 	})

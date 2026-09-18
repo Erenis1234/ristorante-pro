@@ -14,6 +14,12 @@
   }
 
   let paginaAttuale = null
+  const CONN_POLL_ACTIVE_MS = 30 * 1000
+  const CONN_POLL_IDLE_MS = 2 * 60 * 1000
+  let connPollTimer = null
+  let connPollInFlight = false
+  let connPollGeneration = 0
+  let wasAuthScreen = false
 
   function getAuthApiOrThrow(context) {
     const authApi = window.api && window.api.auth
@@ -67,16 +73,36 @@
     window.addEventListener('app:login-success', () => {
       void sincronizzaUiSessione(true)
       setTimeout(() => caricaPagina('dashboard'), 100)
+      startConnectionPolling(true)
     })
 
     window.addEventListener('app:auth-screen-visible', () => {
       chiudiMenuProfilo()
       chiudiSidebarMobile()
+      startConnectionPolling(false)
     })
 
-    // Check connection status every 5 seconds
-    aggiornaPinged()
-    setInterval(aggiornaPinged, 5000)
+    wasAuthScreen = isAuthScreenHash(window.location.hash)
+    startConnectionPolling(true)
+    document.addEventListener('visibilitychange', () => {
+      startConnectionPolling(!document.hidden)
+    })
+    window.addEventListener('focus', () => {
+      void aggiornaPinged(true)
+    })
+    window.addEventListener('online', () => {
+      startConnectionPolling(true)
+    })
+    window.addEventListener('offline', () => {
+      void aggiornaPinged(true)
+    })
+    window.addEventListener('hashchange', () => {
+      const onAuthScreen = isAuthScreenHash(window.location.hash)
+      if (onAuthScreen !== wasAuthScreen) {
+        startConnectionPolling(!onAuthScreen)
+      }
+      wasAuthScreen = onAuthScreen
+    })
 
     // Sync manuale
     const btnSync = document.getElementById('btn-sync')
@@ -291,7 +317,66 @@
   }
 
   // ── Aggiorna stato connessione ───────────────────────────────────
-  async function aggiornaPinged() {
+  function isAuthScreenHash(hash) {
+    return hash === '#login' || hash === '#reset-password'
+  }
+
+  function getConnectionPollInterval() {
+    const onAuthScreen = isAuthScreenHash(window.location.hash)
+    return document.hidden || onAuthScreen ? CONN_POLL_IDLE_MS : CONN_POLL_ACTIVE_MS
+  }
+
+  function stopConnectionPolling() {
+    connPollGeneration += 1
+    if (!connPollTimer) return
+    clearTimeout(connPollTimer)
+    connPollTimer = null
+  }
+
+  function startConnectionPolling(runImmediately) {
+    stopConnectionPolling()
+    const generation = connPollGeneration
+
+    if (runImmediately) {
+      void aggiornaPinged(true)
+    }
+
+    const tick = async () => {
+      if (generation !== connPollGeneration) {
+        return
+      }
+
+      if (!connPollInFlight) {
+        connPollInFlight = true
+        try {
+          await aggiornaPinged(false)
+        } finally {
+          connPollInFlight = false
+        }
+      }
+
+      if (generation !== connPollGeneration) {
+        return
+      }
+
+      connPollTimer = setTimeout(() => {
+        void tick()
+      }, getConnectionPollInterval())
+    }
+
+    connPollTimer = setTimeout(() => {
+      void tick()
+    }, getConnectionPollInterval())
+  }
+
+  async function aggiornaPinged(force) {
+    if (!force) {
+      const onAuthScreen = isAuthScreenHash(window.location.hash)
+      if (document.hidden || onAuthScreen) {
+        return
+      }
+    }
+
     const connIndicator = document.getElementById('conn-indicator')
     const connDot = document.getElementById('conn-dot')
     const dbStatus = document.getElementById('db-status')

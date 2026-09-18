@@ -37,6 +37,8 @@
   ];
 
   var FOTO_MAX_SIZE = 3 * 1024 * 1024; // 3MB
+  var SEARCH_DEBOUNCE_MS = 180;
+  var searchRerenderTimeoutId = null;
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -466,6 +468,16 @@
     state.container.innerHTML = render();
   }
 
+  function scheduleSearchRerender() {
+    if (searchRerenderTimeoutId) {
+      clearTimeout(searchRerenderTimeoutId);
+    }
+    searchRerenderTimeoutId = setTimeout(function () {
+      searchRerenderTimeoutId = null;
+      rerender();
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
   // Salva nello state i valori attuali del form modale (evita reset al rerender)
   function captureModalFormValues() {
     if (!state.container || !state.modal.open) return;
@@ -785,7 +797,7 @@
       var action = target.getAttribute("data-action");
       if (action === "search-ricette") {
         state.searchQuery = target.value || "";
-        rerender();
+        scheduleSearchRerender();
       }
     });
 

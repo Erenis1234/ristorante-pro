@@ -35,15 +35,47 @@ function mapOrdineRighe(db, ordineId, userId) {
 			ofr.quantita_ricevuta,
 			ofr.totale
 		FROM ordine_fornitore_righe ofr
-		WHERE ofr.ordine_id = ? AND ofr.user_id = ?
+		WHERE ofr.ordine_id = ? AND (ofr.user_id = ? OR ofr.user_id IS NULL)
 		ORDER BY ofr.ingrediente_nome ASC
 	`).all(ordineId, userId)
 }
 
-function mapOrdine(db, ordine, userId) {
+function mapOrdineRigheBatch(db, ordineIds, userId) {
+	if (!Array.isArray(ordineIds) || ordineIds.length === 0) {
+		return new Map()
+	}
+
+	const placeholders = ordineIds.map(() => '?').join(', ')
+	const rows = db.prepare(`
+		SELECT
+			ofr.id,
+			ofr.ordine_id,
+			ofr.ingrediente_id,
+			ofr.ingrediente_nome,
+			ofr.quantita,
+			ofr.prezzo,
+			ofr.quantita_ricevuta,
+			ofr.totale
+		FROM ordine_fornitore_righe ofr
+		WHERE (ofr.user_id = ? OR ofr.user_id IS NULL) AND ofr.ordine_id IN (${placeholders})
+		ORDER BY ofr.ordine_id ASC, ofr.ingrediente_nome ASC
+	`).all(userId, ...ordineIds)
+
+	const map = new Map()
+	for (const row of rows) {
+		const ordineId = row.ordine_id
+		if (!map.has(ordineId)) {
+			map.set(ordineId, [])
+		}
+		map.get(ordineId).push(row)
+	}
+	return map
+}
+
+function mapOrdine(db, ordine, userId, righeByOrdineId = null) {
 	return {
 		...ordine,
-		righe: mapOrdineRighe(db, ordine.id, userId),
+		righe: righeByOrdineId ? (righeByOrdineId.get(ordine.id) || []) : mapOrdineRighe(db, ordine.id, userId),
 	}
 }
 
@@ -58,21 +90,69 @@ function syncRigheOrdine(ordineId, righe, userId) {
 			'SELECT id FROM ordine_fornitore_righe WHERE ordine_id = ? AND user_id = ?'
 		).all(ordineId, userId)
 
+		db.prepare(
+			'DELETE FROM ordine_fornitore_righe WHERE ordine_id = ? AND user_id = ?'
+		).run(ordineId, userId)
+
 		for (const riga of esistenti) {
-			dbManager.eliminaLocale('ordine_fornitore_righe', riga.id, userId)
+			dbManager.accodaSyncLocale(
+				'ordine_fornitore_righe',
+				riga.id,
+				{ id: riga.id, user_id: userId },
+				userId,
+				'delete'
+			)
 		}
+
+		const insertStmt = db.prepare(`
+			INSERT INTO ordine_fornitore_righe (
+				ordine_id,
+				ingrediente_id,
+				ingrediente_nome,
+				quantita,
+				prezzo,
+				quantita_ricevuta,
+				user_id,
+				updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+		`)
+		const getInsertedStmt = db.prepare(`
+			SELECT
+				id,
+				ordine_id,
+				ingrediente_id,
+				ingrediente_nome,
+				quantita,
+				prezzo,
+				quantita_ricevuta,
+				totale,
+				user_id,
+				updated_at
+			FROM ordine_fornitore_righe
+			WHERE id = ? AND user_id = ?
+		`)
 
 		for (const riga of righe) {
 			const nomeIngrediente = String(riga.ingrediente_nome || riga.ingrediente_id || '').trim()
 			if (!nomeIngrediente) continue
-			dbManager.salvaLocale('ordine_fornitore_righe', {
-				ordine_id: ordineId,
-				ingrediente_id: null,
-				ingrediente_nome: nomeIngrediente,
-				quantita: Number(riga.quantita ?? 0),
-				prezzo: Number(riga.prezzo ?? 0),
-				quantita_ricevuta: Number(riga.quantita_ricevuta ?? 0),
-			}, userId)
+			const ingredienteId = Number(riga.ingrediente_id)
+			const inserted = insertStmt.run(
+				ordineId,
+				Number.isFinite(ingredienteId) ? ingredienteId : null,
+				nomeIngrediente,
+				Number(riga.quantita ?? 0),
+				Number(riga.prezzo ?? 0),
+				Number(riga.quantita_ricevuta ?? 0),
+				userId
+			)
+			const localRecord = getInsertedStmt.get(inserted.lastInsertRowid, userId)
+			dbManager.accodaSyncLocale(
+				'ordine_fornitore_righe',
+				localRecord.id,
+				localRecord,
+				userId,
+				'upsert'
+			)
 		}
 	})()
 }
@@ -81,13 +161,28 @@ async function getOrdiniFornitori() {
 	const userId = getUserIdOrThrow()
 	const db = getDb()
 	const ordini = db.prepare(`
-		SELECT *
+		SELECT
+			id,
+			fornitore,
+			stato,
+			data_ordine,
+			data_consegna_prevista,
+			data_ricezione,
+			note,
+			totale,
+			user_id,
+			updated_at
 		FROM ordini_fornitori
 		WHERE user_id = ?
 		ORDER BY data_ordine DESC, id DESC
 	`).all(userId)
+	const righeByOrdineId = mapOrdineRigheBatch(
+		db,
+		ordini.map(ordine => ordine.id),
+		userId
+	)
 
-	return ordini.map(ordine => mapOrdine(db, ordine, userId))
+	return ordini.map(ordine => mapOrdine(db, ordine, userId, righeByOrdineId))
 }
 
 async function addOrdineFornitore(dati) {
@@ -132,15 +227,8 @@ async function updateStatoOrdine(id, stato) {
 
 async function deleteOrdine(id) {
 	const userId = getUserIdOrThrow()
-	const db = getDb()
-	const righe = db.prepare(
-		'SELECT id FROM ordine_fornitore_righe WHERE ordine_id = ? AND user_id = ?'
-	).all(id, userId)
-
-	for (const riga of righe) {
-		await dbManager.elimina('ordine_fornitore_righe', riga.id, userId)
-	}
-
+	// La FK ordine_fornitore_righe.ordine_id è ON DELETE CASCADE: eliminando
+	// l'ordine padre vengono eliminate automaticamente tutte le righe figlie.
 	return dbManager.elimina('ordini_fornitori', id, userId)
 }
 

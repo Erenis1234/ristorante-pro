@@ -2,6 +2,7 @@
   'use strict'
 
   const STORAGE_KEY = 'ristorante-profile-data'
+  let profileDataUpdatedListenerBound = false
 
   function getProfileData() {
     try {
@@ -75,6 +76,11 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
+  }
+
+  function onProfileDataUpdated() {
+    const latest = getProfileData()
+    applyProfileToUi(latest)
   }
 
   function applyProfileToUi(profileData) {
@@ -165,10 +171,10 @@
         renderProfilePage(container, profileData)
       })
 
-      window.addEventListener('profile:data-updated', () => {
-        const latest = getProfileData()
-        applyProfileToUi(latest)
-      })
+      if (!profileDataUpdatedListenerBound) {
+        window.addEventListener('profile:data-updated', onProfileDataUpdated)
+        profileDataUpdatedListenerBound = true
+      }
 
       applyProfileToUi(profileData)
       return Promise.resolve()

@@ -29,6 +29,25 @@ test('controllaConnessione restituisce false quando il client è assente', async
   assert.equal(result, false)
 })
 
+test('controllaConnessione usa cache breve per ridurre chiamate ripetute', async () => {
+  let calls = 0
+  const client = {
+    auth: {
+      getSession: async () => {
+        calls += 1
+        return { data: { session: null }, error: null }
+      },
+    },
+  }
+
+  const first = await controllaConnessione(client)
+  const second = await controllaConnessione(client)
+
+  assert.equal(first, true)
+  assert.equal(second, true)
+  assert.equal(calls, 1)
+})
+
 test('formatSupabaseDiagnostic include codice, messaggio e stack trace', () => {
   const err = new Error('boom')
   err.code = 'PGRST301'

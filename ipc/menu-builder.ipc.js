@@ -29,7 +29,7 @@ function getVociMenu(db, menuId, userId) {
 			mv.ordine,
 			mv.user_id
 		FROM menu_voci mv
-		WHERE mv.menu_id = ? AND mv.user_id = ?
+		WHERE mv.menu_id = ? AND (mv.user_id = ? OR mv.user_id IS NULL)
 		ORDER BY mv.ordine ASC, mv.id ASC
 	`).all(menuId, userId)
 }
@@ -49,7 +49,7 @@ function getVociMenuBatch(db, menuIds, userId) {
 			mv.ordine,
 			mv.user_id
 		FROM menu_voci mv
-		WHERE mv.user_id = ? AND mv.menu_id IN (${placeholders})
+		WHERE (mv.user_id = ? OR mv.user_id IS NULL) AND mv.menu_id IN (${placeholders})
 		ORDER BY mv.menu_id ASC, mv.ordine ASC, mv.id ASC
 	`).all(userId, ...menuIds)
 
@@ -205,25 +205,8 @@ async function updateMenu(dati) {
 
 async function deleteMenu(id) {
 	const userId = getUserIdOrThrow()
-	const db = dbManager.getDb()
-	const voci = db.prepare(
-		'SELECT id FROM menu_voci WHERE menu_id = ? AND user_id = ?'
-	).all(id, userId)
-
-	db.transaction(() => {
-		db.prepare('DELETE FROM menu_voci WHERE menu_id = ? AND user_id = ?')
-			.run(id, userId)
-		for (const voce of voci) {
-			dbManager.accodaSyncLocale(
-				'menu_voci',
-				voce.id,
-				{ id: voce.id, user_id: userId },
-				userId,
-				'delete'
-			)
-		}
-	})()
-
+	// La FK menu_voci.menu_id è ON DELETE CASCADE: eliminando il menu padre
+	// vengono rimosse automaticamente (in locale e remoto) tutte le voci figlie.
 	return dbManager.elimina('menu', id, userId)
 }
 

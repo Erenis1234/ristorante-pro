@@ -37,6 +37,8 @@ function pulisciTabelle(db) {
 	db.exec(`
 		DELETE FROM ingredienti;
 		DELETE FROM movimenti_magazzino;
+		DELETE FROM menu_voci;
+		DELETE FROM menu;
 		DELETE FROM coda_sync;
 	`)
 }
@@ -173,6 +175,47 @@ test('accodaSyncLocale aggiorna payload pending esistente', () => {
 
 	assert.equal(rows.length, 1)
 	assert.equal(JSON.parse(rows[0].payload).nome, 'Seconda')
+})
+
+test('transazione figli: delete bulk + accodaSyncLocale mantiene coda coerente', () => {
+	const db = dbManager.getDb()
+	const menu = dbManager.salvaLocale('menu', { nome: 'Menu test' }, USER_A).data
+	const voceA = dbManager.salvaLocale('menu_voci', { menu_id: menu.id, nome: 'Voce A', prezzo: 10, ordine: 0 }, USER_A).data
+	const voceB = dbManager.salvaLocale('menu_voci', { menu_id: menu.id, nome: 'Voce B', prezzo: 12, ordine: 1 }, USER_A).data
+
+	db.transaction(() => {
+		const esistenti = db.prepare(
+			'SELECT id FROM menu_voci WHERE menu_id = ? AND user_id = ?'
+		).all(menu.id, USER_A)
+
+		db.prepare('DELETE FROM menu_voci WHERE menu_id = ? AND user_id = ?')
+			.run(menu.id, USER_A)
+
+		for (const voce of esistenti) {
+			dbManager.accodaSyncLocale('menu_voci', voce.id, { id: voce.id, user_id: USER_A }, USER_A, 'delete')
+		}
+
+		const inserted = db.prepare(`
+			INSERT INTO menu_voci (menu_id, nome, prezzo, ordine, user_id, updated_at)
+			VALUES (?, ?, ?, ?, ?, datetime('now'))
+		`).run(menu.id, 'Voce C', 14, 0, USER_A)
+		const localRecord = db.prepare(`
+			SELECT id, menu_id, nome, prezzo, ordine, user_id, updated_at
+			FROM menu_voci
+			WHERE id = ? AND user_id = ?
+		`).get(inserted.lastInsertRowid, USER_A)
+		dbManager.accodaSyncLocale('menu_voci', localRecord.id, localRecord, USER_A, 'upsert')
+	})()
+
+	const pending = db.prepare(`
+		SELECT record_id, azione
+		FROM coda_sync
+		WHERE entita = 'menu_voci' AND user_id = ? AND sincronizzato = 0
+	`).all(USER_A)
+
+	assert.ok(pending.some(row => row.record_id === String(voceA.id) && row.azione === 'delete'))
+	assert.ok(pending.some(row => row.record_id === String(voceB.id) && row.azione === 'delete'))
+	assert.ok(pending.some(row => row.azione === 'upsert'))
 })
 
 test('eliminaLocale(): non elimina (e segnala notFound) un record di un altro utente', () => {

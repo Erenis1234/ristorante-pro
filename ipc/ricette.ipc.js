@@ -34,7 +34,7 @@ function getRecipeIngredients(db, ricettaId, userId) {
 			ri.note,
 			ri.user_id
 		FROM ricetta_ingredienti ri
-		WHERE ri.ricetta_id = ? AND ri.user_id = ?
+		WHERE ri.ricetta_id = ? AND (ri.user_id = ? OR ri.user_id IS NULL)
 		ORDER BY ri.nome ASC
 	`).all(ricettaId, userId)
 		.map(row => ({
@@ -60,7 +60,7 @@ function getRecipeIngredientsBatch(db, ricettaIds, userId) {
 			ri.note,
 			ri.user_id
 		FROM ricetta_ingredienti ri
-		WHERE ri.user_id = ? AND ri.ricetta_id IN (${placeholders})
+		WHERE (ri.user_id = ? OR ri.user_id IS NULL) AND ri.ricetta_id IN (${placeholders})
 		ORDER BY ri.ricetta_id ASC, ri.nome ASC
 	`).all(userId, ...ricettaIds)
 
@@ -153,9 +153,10 @@ function saveRecipeIngredients(db, ricettaId, ingredienti, userId) {
 			).trim()
 			if (!nome) continue
 
+			const ingredienteId = Number(ingrediente.ingrediente_id)
 			const inserted = insertStmt.run(
 				ricettaId,
-				null,
+				Number.isFinite(ingredienteId) ? ingredienteId : null,
 				nome,
 				ingrediente.quantita,
 				ingrediente.unita_misura || 'g',
@@ -248,26 +249,8 @@ async function updateRicetta(dati) {
 
 async function deleteRicetta(id) {
 	const userId = getUserIdOrThrow()
-	const db = dbManager.getDb()
-	const righe = db.prepare(
-		'SELECT id FROM ricetta_ingredienti WHERE ricetta_id = ? AND user_id = ?'
-	).all(id, userId)
-
-	db.transaction(() => {
-		db.prepare('DELETE FROM ricetta_ingredienti WHERE ricetta_id = ? AND user_id = ?')
-			.run(id, userId)
-
-		for (const riga of righe) {
-			dbManager.accodaSyncLocale(
-				'ricetta_ingredienti',
-				riga.id,
-				{ id: riga.id, user_id: userId },
-				userId,
-				'delete'
-			)
-		}
-	})()
-
+	// La FK ricetta_ingredienti.ricetta_id è ON DELETE CASCADE: eliminando la
+	// ricetta padre vengono rimosse automaticamente tutte le righe figlie.
 	return dbManager.elimina('ricette', id, userId)
 }
 

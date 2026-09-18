@@ -17,6 +17,9 @@
   const CONN_POLL_ACTIVE_MS = 30 * 1000
   const CONN_POLL_IDLE_MS = 2 * 60 * 1000
   let connPollTimer = null
+  let connPollInFlight = false
+  let connPollGeneration = 0
+  let wasAuthScreen = false
 
   function getAuthApiOrThrow(context) {
     const authApi = window.api && window.api.auth
@@ -79,6 +82,7 @@
       startConnectionPolling(false)
     })
 
+    wasAuthScreen = isAuthScreenHash(window.location.hash)
     startConnectionPolling(true)
     document.addEventListener('visibilitychange', () => {
       startConnectionPolling(!document.hidden)
@@ -91,6 +95,13 @@
     })
     window.addEventListener('offline', () => {
       void aggiornaPinged(true)
+    })
+    window.addEventListener('hashchange', () => {
+      const onAuthScreen = isAuthScreenHash(window.location.hash)
+      if (onAuthScreen !== wasAuthScreen) {
+        startConnectionPolling(!onAuthScreen)
+      }
+      wasAuthScreen = onAuthScreen
     })
 
     // Sync manuale
@@ -306,32 +317,61 @@
   }
 
   // ── Aggiorna stato connessione ───────────────────────────────────
+  function isAuthScreenHash(hash) {
+    return hash === '#login' || hash === '#reset-password'
+  }
+
   function getConnectionPollInterval() {
-    const onAuthScreen = window.location.hash === '#login' || window.location.hash === '#reset-password'
+    const onAuthScreen = isAuthScreenHash(window.location.hash)
     return document.hidden || onAuthScreen ? CONN_POLL_IDLE_MS : CONN_POLL_ACTIVE_MS
   }
 
   function stopConnectionPolling() {
+    connPollGeneration += 1
     if (!connPollTimer) return
-    clearInterval(connPollTimer)
+    clearTimeout(connPollTimer)
     connPollTimer = null
   }
 
   function startConnectionPolling(runImmediately) {
     stopConnectionPolling()
+    const generation = connPollGeneration
 
     if (runImmediately) {
       void aggiornaPinged(true)
     }
 
-    connPollTimer = setInterval(() => {
-      void aggiornaPinged(false)
+    const tick = async () => {
+      if (generation !== connPollGeneration) {
+        return
+      }
+
+      if (!connPollInFlight) {
+        connPollInFlight = true
+        try {
+          await aggiornaPinged(false)
+        } finally {
+          connPollInFlight = false
+        }
+      }
+
+      if (generation !== connPollGeneration) {
+        return
+      }
+
+      connPollTimer = setTimeout(() => {
+        void tick()
+      }, getConnectionPollInterval())
+    }
+
+    connPollTimer = setTimeout(() => {
+      void tick()
     }, getConnectionPollInterval())
   }
 
   async function aggiornaPinged(force) {
     if (!force) {
-      const onAuthScreen = window.location.hash === '#login' || window.location.hash === '#reset-password'
+      const onAuthScreen = isAuthScreenHash(window.location.hash)
       if (document.hidden || onAuthScreen) {
         return
       }

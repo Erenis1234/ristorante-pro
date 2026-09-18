@@ -35,7 +35,7 @@ function mapOrdineRighe(db, ordineId, userId) {
 			ofr.quantita_ricevuta,
 			ofr.totale
 		FROM ordine_fornitore_righe ofr
-		WHERE ofr.ordine_id = ? AND ofr.user_id = ?
+		WHERE ofr.ordine_id = ? AND (ofr.user_id = ? OR ofr.user_id IS NULL)
 		ORDER BY ofr.ingrediente_nome ASC
 	`).all(ordineId, userId)
 }
@@ -57,7 +57,7 @@ function mapOrdineRigheBatch(db, ordineIds, userId) {
 			ofr.quantita_ricevuta,
 			ofr.totale
 		FROM ordine_fornitore_righe ofr
-		WHERE ofr.user_id = ? AND ofr.ordine_id IN (${placeholders})
+		WHERE (ofr.user_id = ? OR ofr.user_id IS NULL) AND ofr.ordine_id IN (${placeholders})
 		ORDER BY ofr.ordine_id ASC, ofr.ingrediente_nome ASC
 	`).all(userId, ...ordineIds)
 
@@ -135,9 +135,10 @@ function syncRigheOrdine(ordineId, righe, userId) {
 		for (const riga of righe) {
 			const nomeIngrediente = String(riga.ingrediente_nome || riga.ingrediente_id || '').trim()
 			if (!nomeIngrediente) continue
+			const ingredienteId = Number(riga.ingrediente_id)
 			const inserted = insertStmt.run(
 				ordineId,
-				null,
+				Number.isFinite(ingredienteId) ? ingredienteId : null,
 				nomeIngrediente,
 				Number(riga.quantita ?? 0),
 				Number(riga.prezzo ?? 0),
@@ -226,27 +227,8 @@ async function updateStatoOrdine(id, stato) {
 
 async function deleteOrdine(id) {
 	const userId = getUserIdOrThrow()
-	const db = getDb()
-	const righe = db.prepare(
-		'SELECT id FROM ordine_fornitore_righe WHERE ordine_id = ? AND user_id = ?'
-	).all(id, userId)
-
-	db.transaction(() => {
-		db.prepare(
-			'DELETE FROM ordine_fornitore_righe WHERE ordine_id = ? AND user_id = ?'
-		).run(id, userId)
-
-		for (const riga of righe) {
-			dbManager.accodaSyncLocale(
-				'ordine_fornitore_righe',
-				riga.id,
-				{ id: riga.id, user_id: userId },
-				userId,
-				'delete'
-			)
-		}
-	})()
-
+	// La FK ordine_fornitore_righe.ordine_id è ON DELETE CASCADE: eliminando
+	// l'ordine padre vengono eliminate automaticamente tutte le righe figlie.
 	return dbManager.elimina('ordini_fornitori', id, userId)
 }
 
